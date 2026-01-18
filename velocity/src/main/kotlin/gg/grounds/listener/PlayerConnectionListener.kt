@@ -6,7 +6,7 @@ import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.DisconnectEvent
 import com.velocitypowered.api.event.connection.LoginEvent
 import gg.grounds.config.PluginConfig
-import gg.grounds.player.presence.PlayerLoginStatus
+import gg.grounds.grpc.player.LoginStatus
 import gg.grounds.presence.PlayerPresenceService
 import net.kyori.adventure.text.Component
 import org.slf4j.Logger
@@ -30,14 +30,15 @@ class PlayerConnectionListener(
 
             val kickMessage =
                 when (result.status) {
-                    PlayerLoginStatus.ACCEPTED -> {
+                    LoginStatus.LOGIN_STATUS_ACCEPTED -> {
                         logger.info("player session created: {} ({})", name, playerId)
                         return@async
                     }
-                    PlayerLoginStatus.ALREADY_ONLINE -> messages.alreadyOnline
-                    PlayerLoginStatus.INVALID_REQUEST -> messages.invalidRequest
-                    PlayerLoginStatus.UNSPECIFIED,
-                    PlayerLoginStatus.ERROR -> messages.genericError
+                    LoginStatus.LOGIN_STATUS_ALREADY_ONLINE -> messages.alreadyOnline
+                    LoginStatus.LOGIN_STATUS_INVALID_REQUEST -> messages.invalidRequest
+                    LoginStatus.LOGIN_STATUS_UNSPECIFIED,
+                    LoginStatus.LOGIN_STATUS_ERROR,
+                    LoginStatus.UNRECOGNIZED -> messages.genericError
                 }
 
             logger.warn(

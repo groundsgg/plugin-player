@@ -1,5 +1,5 @@
 plugins {
-    id("gg.grounds.kotlin-conventions") version "0.2.0"
+    id("gg.grounds.kotlin-conventions")
     id("com.google.protobuf") version "0.9.6"
 }
 
@@ -14,11 +14,10 @@ repositories {
             password = providers.gradleProperty("github.token").get()
         }
     }
-    mavenCentral()
 }
 
 dependencies {
-    implementation("com.google.protobuf:protobuf-java:$protobufVersion")
+    api("com.google.protobuf:protobuf-java:$protobufVersion")
     implementation("io.grpc:grpc-protobuf:$grpcVersion")
     implementation("io.grpc:grpc-stub:$grpcVersion")
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")

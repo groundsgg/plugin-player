@@ -1,8 +1,6 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
-plugins { id("gg.grounds.velocity-conventions") version "0.2.0" }
-
-repositories { mavenCentral() }
+plugins { id("gg.grounds.velocity-conventions") }
 
 dependencies {
     implementation(project(":common"))

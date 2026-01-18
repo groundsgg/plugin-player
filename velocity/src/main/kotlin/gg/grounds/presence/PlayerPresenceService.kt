@@ -1,35 +1,32 @@
 package gg.grounds.presence
 
-import gg.grounds.player.presence.PlayerLoginResult
-import gg.grounds.player.presence.PlayerLogoutResult
-import gg.grounds.player.presence.PlayerPresenceClient
+import gg.grounds.grpc.player.PlayerLoginReply
+import gg.grounds.grpc.player.PlayerLogoutReply
+import gg.grounds.player.presence.GrpcPlayerPresenceClient
 import gg.grounds.player.presence.PlayerPresenceClientConfig
-import gg.grounds.player.presence.grpc.GrpcPlayerPresenceClient
-import java.util.UUID
+import java.util.*
 import org.slf4j.Logger
 
 class PlayerPresenceService(private val logger: Logger) : AutoCloseable {
-    @Volatile private var client: PlayerPresenceClient? = null
+    private lateinit var client: GrpcPlayerPresenceClient
 
     fun configure(config: PlayerPresenceClientConfig) {
         close()
         client = GrpcPlayerPresenceClient.create(config)
     }
 
-    fun tryLogin(playerId: UUID): PlayerLoginResult? {
-        val current = client ?: return null
+    fun tryLogin(playerId: UUID): PlayerLoginReply? {
         return try {
-            current.tryLogin(playerId)
+            client.tryLogin(playerId)
         } catch (e: RuntimeException) {
             logger.warn("player presence tryLogin failed: {}", playerId, e)
             null
         }
     }
 
-    fun logout(playerId: UUID): PlayerLogoutResult? {
-        val current = client ?: return null
+    fun logout(playerId: UUID): PlayerLogoutReply? {
         return try {
-            current.logout(playerId)
+            client.logout(playerId)
         } catch (e: RuntimeException) {
             logger.warn("player presence logout failed: {}", playerId, e)
             null
@@ -37,12 +34,8 @@ class PlayerPresenceService(private val logger: Logger) : AutoCloseable {
     }
 
     override fun close() {
-        val current = client
-        client = null
-        try {
-            current?.close()
-        } catch (e: RuntimeException) {
-            logger.warn("player presence client close failed", e)
+        if (this::client.isInitialized) {
+            client.close()
         }
     }
 }

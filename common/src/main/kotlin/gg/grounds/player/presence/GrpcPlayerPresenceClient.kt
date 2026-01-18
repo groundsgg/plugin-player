@@ -1,0 +1,82 @@
+package gg.grounds.player.presence
+
+import gg.grounds.grpc.player.LoginStatus
+import gg.grounds.grpc.player.PlayerLoginReply
+import gg.grounds.grpc.player.PlayerLoginRequest
+import gg.grounds.grpc.player.PlayerLogoutReply
+import gg.grounds.grpc.player.PlayerLogoutRequest
+import gg.grounds.grpc.player.PlayerPresenceServiceGrpc
+import io.grpc.ManagedChannel
+import io.grpc.ManagedChannelBuilder
+import io.grpc.StatusRuntimeException
+import java.util.UUID
+import java.util.concurrent.TimeUnit
+
+class GrpcPlayerPresenceClient
+private constructor(
+    private val channel: ManagedChannel,
+    private val stub: PlayerPresenceServiceGrpc.PlayerPresenceServiceBlockingStub,
+    private val config: PlayerPresenceClientConfig,
+) : AutoCloseable {
+    fun tryLogin(playerId: UUID): PlayerLoginReply {
+        return try {
+            stub
+                .withDeadlineAfter(config.timeout.toMillis(), TimeUnit.MILLISECONDS)
+                .tryPlayerLogin(
+                    PlayerLoginRequest.newBuilder().setPlayerId(playerId.toString()).build()
+                )
+        } catch (e: StatusRuntimeException) {
+            errorReply(e.status.toString())
+        } catch (e: RuntimeException) {
+            errorReply(e.message ?: e::class.java.name)
+        }
+    }
+
+    fun logout(playerId: UUID): PlayerLogoutReply {
+        return try {
+            stub
+                .withDeadlineAfter(config.timeout.toMillis(), TimeUnit.MILLISECONDS)
+                .playerLogout(
+                    PlayerLogoutRequest.newBuilder().setPlayerId(playerId.toString()).build()
+                )
+        } catch (e: StatusRuntimeException) {
+            errorLogoutReply(e.status.toString())
+        } catch (e: RuntimeException) {
+            errorLogoutReply(e.message ?: e::class.java.name)
+        }
+    }
+
+    override fun close() {
+        channel.shutdown()
+        try {
+            if (!channel.awaitTermination(3, TimeUnit.SECONDS)) {
+                channel.shutdownNow()
+                channel.awaitTermination(3, TimeUnit.SECONDS)
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            channel.shutdownNow()
+        }
+    }
+
+    companion object {
+        fun create(config: PlayerPresenceClientConfig): GrpcPlayerPresenceClient {
+            val channelBuilder = ManagedChannelBuilder.forTarget(config.target)
+            if (config.plaintext) {
+                channelBuilder.usePlaintext()
+            }
+            val channel = channelBuilder.build()
+            val stub = PlayerPresenceServiceGrpc.newBlockingStub(channel)
+            return GrpcPlayerPresenceClient(channel, stub, config)
+        }
+
+        private fun errorReply(message: String): PlayerLoginReply =
+            PlayerLoginReply.newBuilder()
+                .setStatus(LoginStatus.LOGIN_STATUS_ERROR)
+                .setMessage(message)
+                .build()
+
+        private fun errorLogoutReply(message: String): PlayerLogoutReply =
+            PlayerLogoutReply.newBuilder().setRemoved(false).setMessage(message).build()
+    }
+}
