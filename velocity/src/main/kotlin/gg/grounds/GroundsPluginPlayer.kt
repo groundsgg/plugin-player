@@ -13,7 +13,7 @@ import gg.grounds.presence.PlayerPresenceService
 import java.nio.file.Path
 import org.slf4j.Logger
 
-@Plugin(id = "grounds-plugin-player", name = "Grounds Player Plugin")
+@Plugin(id = "plugin-player", name = "Grounds Player Plugin")
 class GroundsPluginPlayer
 @Inject
 constructor(
