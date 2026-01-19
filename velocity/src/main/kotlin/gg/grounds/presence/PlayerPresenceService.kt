@@ -1,8 +1,8 @@
 package gg.grounds.presence
 
-import gg.grounds.grpc.player.PlayerLoginReply
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.player.presence.GrpcPlayerPresenceClient
+import gg.grounds.player.presence.PlayerLoginResult
 import gg.grounds.player.presence.PlayerPresenceClientConfig
 import java.util.*
 import org.slf4j.Logger
@@ -15,12 +15,12 @@ class PlayerPresenceService(private val logger: Logger) : AutoCloseable {
         client = GrpcPlayerPresenceClient.create(config)
     }
 
-    fun tryLogin(playerId: UUID): PlayerLoginReply? {
+    fun tryLogin(playerId: UUID): PlayerLoginResult {
         return try {
             client.tryLogin(playerId)
         } catch (e: RuntimeException) {
             logger.warn("player presence tryLogin failed: {}", playerId, e)
-            null
+            PlayerLoginResult.Error(e.message ?: e::class.java.name)
         }
     }
 

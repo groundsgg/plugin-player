@@ -1,13 +1,12 @@
 package gg.grounds.player.presence
 
-import gg.grounds.grpc.player.LoginStatus
-import gg.grounds.grpc.player.PlayerLoginReply
 import gg.grounds.grpc.player.PlayerLoginRequest
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.grpc.player.PlayerLogoutRequest
 import gg.grounds.grpc.player.PlayerPresenceServiceGrpc
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
+import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -18,17 +17,22 @@ private constructor(
     private val stub: PlayerPresenceServiceGrpc.PlayerPresenceServiceBlockingStub,
     private val config: PlayerPresenceClientConfig,
 ) : AutoCloseable {
-    fun tryLogin(playerId: UUID): PlayerLoginReply {
+    fun tryLogin(playerId: UUID): PlayerLoginResult {
         return try {
-            stub
-                .withDeadlineAfter(config.timeout.toMillis(), TimeUnit.MILLISECONDS)
-                .tryPlayerLogin(
-                    PlayerLoginRequest.newBuilder().setPlayerId(playerId.toString()).build()
-                )
+            val reply =
+                stub
+                    .withDeadlineAfter(config.timeout.toMillis(), TimeUnit.MILLISECONDS)
+                    .tryPlayerLogin(
+                        PlayerLoginRequest.newBuilder().setPlayerId(playerId.toString()).build()
+                    )
+            PlayerLoginResult.Success(reply)
         } catch (e: StatusRuntimeException) {
-            errorReply(e.status.toString())
+            if (isServiceUnavailable(e.status.code)) {
+                return PlayerLoginResult.Unavailable(e.status.toString())
+            }
+            PlayerLoginResult.Error(e.status.toString())
         } catch (e: RuntimeException) {
-            errorReply(e.message ?: e::class.java.name)
+            PlayerLoginResult.Error(e.message ?: e::class.java.name)
         }
     }
 
@@ -70,13 +74,10 @@ private constructor(
             return GrpcPlayerPresenceClient(channel, stub, config)
         }
 
-        private fun errorReply(message: String): PlayerLoginReply =
-            PlayerLoginReply.newBuilder()
-                .setStatus(LoginStatus.LOGIN_STATUS_ERROR)
-                .setMessage(message)
-                .build()
-
         private fun errorLogoutReply(message: String): PlayerLogoutReply =
             PlayerLogoutReply.newBuilder().setRemoved(false).setMessage(message).build()
+
+        private fun isServiceUnavailable(status: Status.Code): Boolean =
+            status == Status.Code.UNAVAILABLE || status == Status.Code.DEADLINE_EXCEEDED
     }
 }

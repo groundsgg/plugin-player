@@ -20,7 +20,6 @@ dependencies {
     api("com.google.protobuf:protobuf-java:$protobufVersion")
     implementation("io.grpc:grpc-protobuf:$grpcVersion")
     implementation("io.grpc:grpc-stub:$grpcVersion")
-    compileOnly("javax.annotation:javax.annotation-api:1.3.2")
 
     protobuf("gg.grounds:library-grpc-contracts-player:0.1.0")
 }
