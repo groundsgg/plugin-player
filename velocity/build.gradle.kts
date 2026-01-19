@@ -1,23 +1,8 @@
-plugins {
-    id("com.gradleup.shadow") version "9.3.0"
-}
+plugins { id("gg.grounds.velocity-conventions") }
 
 dependencies {
     implementation(project(":common"))
-    compileOnly("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
-    annotationProcessor("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
-}
-
-tasks.build {
-    dependsOn(tasks.shadowJar)
-}
-
-tasks.jar {
-    enabled = false
-}
-
-tasks.shadowJar {
-    archiveBaseName.set(rootProject.name)
-    archiveClassifier.set("") // Removes the 'all' classifier
-    archiveVersion.set("") // Removes the version from the jar name
+    implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.0.3")
+    implementation("tools.jackson.module:jackson-module-kotlin:3.0.3")
+    implementation("io.grpc:grpc-netty-shaded:1.78.0")
 }

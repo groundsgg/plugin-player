@@ -1,0 +1,4 @@
+serviceUnavailable: "Login service unavailable"
+alreadyOnline: "You are already online."
+invalidRequest: "Invalid login request."
+genericError: "Unable to create player session."
