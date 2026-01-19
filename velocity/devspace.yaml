@@ -1,11 +1,11 @@
 version: v2beta1
-name: plugin-agones-velocity
+name: plugin-player-velocity
 
 deployments:
   app:
     namespace: games
     helm:
-      releaseName: plugin-agones-velocity
+      releaseName: plugin-player-velocity
       chart:
         name: oci://ghcr.io/groundsgg/charts/agones-fleet
         version: 0.1.0
