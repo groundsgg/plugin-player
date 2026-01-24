@@ -10,4 +10,7 @@ repositories {
     }
 }
 
-dependencies { protobuf("gg.grounds:library-grpc-contracts-player:0.1.0") }
+dependencies {
+    protobuf("gg.grounds:library-grpc-contracts-player:0.1.0")
+    protobuf("gg.grounds:library-grpc-contracts-permission:feat-perm-protos-SNAPSHOT")
+}

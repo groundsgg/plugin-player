@@ -7,9 +7,16 @@ import com.velocitypowered.api.event.proxy.ProxyShutdownEvent
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
+import gg.grounds.config.EnvironmentConfig
 import gg.grounds.config.MessagesConfigLoader
-import gg.grounds.listener.PlayerConnectionListener
+import gg.grounds.permissions.PermissionsCache
+import gg.grounds.permissions.commands.PermissionsCommand
+import gg.grounds.permissions.listener.PermissionsConnectionListener
+import gg.grounds.permissions.listener.PermissionsSetupListener
+import gg.grounds.permissions.services.PermissionsAdminService
+import gg.grounds.permissions.services.PermissionsService
 import gg.grounds.presence.PlayerPresenceService
+import gg.grounds.presence.listener.PlayerConnectionListener
 import io.grpc.LoadBalancerRegistry
 import io.grpc.NameResolverRegistry
 import io.grpc.internal.DnsNameResolverProvider
@@ -33,6 +40,10 @@ constructor(
     @param:DataDirectory private val dataDirectory: Path,
 ) {
     private val playerPresenceService = PlayerPresenceService()
+    private val permissionsService = PermissionsService(logger)
+    private val permissionsCache = PermissionsCache(permissionsService, logger)
+    private val permissionsAdminService = PermissionsAdminService(logger)
+    private val environmentConfig = EnvironmentConfig()
 
     init {
         logger.info("Initialized plugin (plugin=plugin-player, version={})", BuildInfo.VERSION)
@@ -43,8 +54,16 @@ constructor(
         registerProviders()
 
         val messages = MessagesConfigLoader(logger, dataDirectory).loadOrCreate()
-        val target = resolveTarget()
-        playerPresenceService.configure(target)
+        val presenceTarget = environmentConfig.presenceTarget()
+        val permissionsTarget = environmentConfig.permissionsTarget(presenceTarget)
+        playerPresenceService.configure(presenceTarget)
+        permissionsService.configure(permissionsTarget)
+        permissionsAdminService.configure(permissionsTarget)
+        permissionsCache.startAutoRefresh(
+            proxy,
+            this,
+            environmentConfig.permissionsRefreshIntervalSeconds(),
+        )
 
         proxy.eventManager.register(
             this,
@@ -54,13 +73,32 @@ constructor(
                 messages = messages,
             ),
         )
+        proxy.eventManager.register(
+            this,
+            PermissionsConnectionListener(logger = logger, permissionsCache = permissionsCache),
+        )
+        proxy.eventManager.register(
+            this,
+            PermissionsSetupListener(permissionsCache = permissionsCache),
+        )
+        val permissionsCommand =
+            PermissionsCommand(proxy, permissionsCache, permissionsService, permissionsAdminService)
+                .create()
+        proxy.commandManager.register(
+            proxy.commandManager.metaBuilder(permissionsCommand).build(),
+            permissionsCommand,
+        )
 
-        logger.info("Configured player presence gRPC client (target={})", target)
+        logger.info("Configured player presence gRPC client (target={})", presenceTarget)
+        logger.info("Configured permissions gRPC client (target={})", permissionsTarget)
     }
 
     @Subscribe
     fun onShutdown(event: ProxyShutdownEvent) {
         playerPresenceService.close()
+        permissionsCache.close()
+        permissionsService.close()
+        permissionsAdminService.close()
     }
 
     /**
@@ -72,10 +110,5 @@ constructor(
     private fun registerProviders() {
         NameResolverRegistry.getDefaultRegistry().register(DnsNameResolverProvider())
         LoadBalancerRegistry.getDefaultRegistry().register(PickFirstLoadBalancerProvider())
-    }
-
-    private fun resolveTarget(): String {
-        return System.getenv("PLAYER_PRESENCE_GRPC_TARGET")?.takeIf { it.isNotBlank() }
-            ?: error("Missing required environment variable PLAYER_PRESENCE_GRPC_TARGET")
     }
 }

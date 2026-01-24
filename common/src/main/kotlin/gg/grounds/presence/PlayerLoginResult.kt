@@ -1,4 +1,4 @@
-package gg.grounds.player.presence
+package gg.grounds.presence
 
 import gg.grounds.grpc.player.PlayerLoginReply
 
