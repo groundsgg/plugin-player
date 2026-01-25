@@ -23,8 +23,10 @@ class PermissionsSuggestions(
 
     fun group(): SuggestionProvider<CommandSource> = SuggestionProvider { _, builder ->
         val prefix = builder.remaining
-        groupNameCache.suggest(prefix).forEach { builder.suggest(it) }
-        builder.buildFuture()
+        groupNameCache.suggest(prefix).thenApply { groups ->
+            groups.forEach { builder.suggest(it) }
+            builder.build()
+        }
     }
 
     fun permission(): SuggestionProvider<CommandSource> = SuggestionProvider { _, builder ->
@@ -44,32 +46,30 @@ class PermissionsSuggestions(
         private val lastRefreshMillis = AtomicLong(0)
         private val inFlight = AtomicBoolean(false)
 
-        fun suggest(prefix: String): List<String> {
-            refreshIfNeeded()
-            return names.get().filter { it.startsWith(prefix, ignoreCase = true) }
-        }
-
-        private fun refreshIfNeeded() {
+        fun suggest(prefix: String): CompletableFuture<List<String>> {
             val now = System.currentTimeMillis()
-            if (now - lastRefreshMillis.get() < CACHE_TTL_MILLIS) {
-                return
+            val cached = names.get()
+            if (now - lastRefreshMillis.get() < CACHE_TTL_MILLIS && cached.isNotEmpty()) {
+                return CompletableFuture.completedFuture(
+                    cached.filter { it.startsWith(prefix, ignoreCase = true) }
+                )
             }
             if (!inFlight.compareAndSet(false, true)) {
-                return
+                return CompletableFuture.completedFuture(
+                    cached.filter { it.startsWith(prefix, ignoreCase = true) }
+                )
             }
-            CompletableFuture.runAsync {
-                try {
+            return CompletableFuture.supplyAsync {
                     val reply =
                         permissionsAdminService.listGroups(
                             ListGroupsRequest.newBuilder().setIncludePermissions(false).build()
                         )
-                    val updated = reply?.groupsList?.map { it.groupName } ?: names.get()
+                    val updated = reply?.groupsList?.map { it.groupName } ?: cached
                     names.set(updated)
-                } finally {
-                    lastRefreshMillis.set(now)
-                    inFlight.set(false)
+                    lastRefreshMillis.set(System.currentTimeMillis())
+                    updated.filter { it.startsWith(prefix, ignoreCase = true) }
                 }
-            }
+                .whenComplete { _, _ -> inFlight.set(false) }
         }
 
         companion object {

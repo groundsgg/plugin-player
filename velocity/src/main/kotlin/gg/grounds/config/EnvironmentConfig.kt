@@ -9,6 +9,14 @@ class EnvironmentConfig {
         return env("PERMISSIONS_GRPC_TARGET") ?: presenceTarget
     }
 
+    fun permissionsEventsTarget(permissionsTarget: String): String {
+        return env("PERMISSIONS_EVENTS_GRPC_TARGET") ?: permissionsTarget
+    }
+
+    fun permissionsEventsServerId(): String? {
+        return env("PERMISSIONS_EVENTS_SERVER_ID")
+    }
+
     fun permissionsRefreshIntervalSeconds(
         defaultSeconds: Long = DEFAULT_PERMISSIONS_REFRESH_SECONDS
     ): Long {
