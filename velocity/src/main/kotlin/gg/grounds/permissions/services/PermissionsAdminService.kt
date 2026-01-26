@@ -29,7 +29,7 @@ class PermissionsAdminService(private val logger: Logger) : AutoCloseable {
 
     fun configure(target: String) {
         close()
-        client = GrpcPermissionsAdminClient.Companion.create(target)
+        client = GrpcPermissionsAdminClient.create(target)
     }
 
     fun createGroup(request: CreateGroupRequest): CreateGroupReply? =
