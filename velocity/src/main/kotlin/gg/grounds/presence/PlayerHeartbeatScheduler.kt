@@ -45,7 +45,7 @@ class PlayerHeartbeatScheduler(
                 result.message,
             )
         } else {
-            logger.info(
+            logger.debug(
                 "Player session heartbeat batch completed (playerCount={}, result=success)",
                 playerIds.size,
             )

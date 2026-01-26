@@ -34,7 +34,7 @@ class PlayerPresenceService : AutoCloseable {
     fun heartbeatBatch(playerIds: Collection<UUID>): HeartbeatBatchResult {
         return try {
             val reply = client.heartbeatBatch(playerIds)
-            HeartbeatBatchResult(reply.message == "heartbeat accepted", reply.message)
+            HeartbeatBatchResult(reply.success, reply.message)
         } catch (e: RuntimeException) {
             HeartbeatBatchResult(false, e.message ?: e::class.java.name)
         }

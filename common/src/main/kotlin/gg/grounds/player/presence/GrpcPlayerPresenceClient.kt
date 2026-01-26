@@ -96,6 +96,7 @@ private constructor(
             PlayerHeartbeatBatchReply.newBuilder()
                 .setUpdated(0)
                 .setMissing(0)
+                .setSuccess(false)
                 .setMessage(message)
                 .build()
 
