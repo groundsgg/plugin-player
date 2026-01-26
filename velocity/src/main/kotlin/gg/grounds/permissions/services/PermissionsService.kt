@@ -11,7 +11,7 @@ class PermissionsService(private val logger: Logger) : AutoCloseable {
 
     fun configure(target: String) {
         close()
-        client = GrpcPermissionsClient.Companion.create(target)
+        client = GrpcPermissionsClient.create(target)
     }
 
     fun fetchPlayerPermissions(playerId: UUID): PlayerPermissions? {
@@ -60,7 +60,7 @@ class PermissionsService(private val logger: Logger) : AutoCloseable {
         exception: StatusRuntimeException,
     ) {
         val message =
-            if (GrpcPermissionsClient.Companion.isServiceUnavailable(exception)) {
+            if (GrpcPermissionsClient.isServiceUnavailable(exception)) {
                 "Permissions service unavailable"
             } else {
                 "Permissions service request failed"

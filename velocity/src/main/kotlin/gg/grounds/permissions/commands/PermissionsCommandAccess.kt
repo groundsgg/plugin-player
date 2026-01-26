@@ -7,6 +7,10 @@ import java.util.UUID
 object PermissionsCommandAccess {
     private const val ADMIN_PERMISSION = "grounds.permissions.admin"
 
+    /**
+     * Non-player sources (e.g. console) are treated as admins by default. Player sources must have
+     * [ADMIN_PERMISSION] to be considered admin.
+     */
     fun isAdmin(source: CommandSource): Boolean {
         return source !is Player || source.hasPermission(ADMIN_PERMISSION)
     }

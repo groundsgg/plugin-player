@@ -9,6 +9,7 @@ import io.grpc.stub.StreamObserver
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -24,22 +25,30 @@ class PermissionsEventsSubscriber(
         }
     private val closed = AtomicBoolean(false)
     private val reconnectDelayMs = AtomicLong(MIN_RECONNECT_DELAY_MS)
+    private val streamGeneration = AtomicLong(0)
     private var lastEventId: String? = null
     private var serverId: String? = null
     private lateinit var client: GrpcPermissionsEventsClient
+    private var reconnectFuture: ScheduledFuture<*>? = null
 
     fun configure(target: String, serverId: String?) {
         closed.set(false)
+        streamGeneration.incrementAndGet()
+        reconnectFuture?.cancel(false)
+        reconnectFuture = null
         if (this::client.isInitialized) {
             client.close()
         }
         this.serverId = serverId
         client = GrpcPermissionsEventsClient.create(target)
-        startStream()
+        startStream(streamGeneration.get())
     }
 
-    private fun startStream() {
+    private fun startStream(generation: Long) {
         if (closed.get()) {
+            return
+        }
+        if (generation != streamGeneration.get()) {
             return
         }
         val requestBuilder = SubscribePermissionsChangesRequest.newBuilder()
@@ -59,12 +68,15 @@ class PermissionsEventsSubscriber(
             return
         }
         val delayMs = reconnectDelayMs.get()
+        val generation = streamGeneration.get()
         logger.warn(
             "Permissions event stream disconnected (reason={}, retryInMs={})",
             reason,
             delayMs,
         )
-        executor.schedule({ startStream() }, delayMs, TimeUnit.MILLISECONDS)
+        reconnectFuture?.cancel(false)
+        reconnectFuture =
+            executor.schedule({ startStream(generation) }, delayMs, TimeUnit.MILLISECONDS)
         val nextDelay = (delayMs * 2).coerceAtMost(MAX_RECONNECT_DELAY_MS)
         reconnectDelayMs.set(nextDelay)
     }
@@ -75,6 +87,8 @@ class PermissionsEventsSubscriber(
 
     override fun close() {
         closed.set(true)
+        reconnectFuture?.cancel(false)
+        reconnectFuture = null
         if (this::client.isInitialized) {
             client.close()
         }
