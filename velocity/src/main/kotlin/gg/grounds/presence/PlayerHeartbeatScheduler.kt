@@ -14,6 +14,8 @@ class PlayerHeartbeatScheduler(
     private var heartbeatTask: ScheduledTask? = null
 
     fun start() {
+        heartbeatTask?.cancel()
+        heartbeatTask = null
         val heartbeatIntervalSeconds = resolveHeartbeatIntervalSeconds()
         heartbeatTask =
             proxy.scheduler
