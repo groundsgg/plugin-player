@@ -5,4 +5,5 @@ dependencies {
     implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.0.4")
     implementation("tools.jackson.module:jackson-module-kotlin:3.0.4")
     implementation("io.grpc:grpc-netty-shaded:1.78.0")
+    implementation("io.grpc:grpc-stub:1.78.0")
 }

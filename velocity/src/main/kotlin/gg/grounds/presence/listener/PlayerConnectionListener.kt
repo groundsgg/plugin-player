@@ -1,4 +1,4 @@
-package gg.grounds.listener
+package gg.grounds.presence.listener
 
 import com.velocitypowered.api.event.EventTask
 import com.velocitypowered.api.event.Subscribe
@@ -8,7 +8,7 @@ import com.velocitypowered.api.util.UuidUtils
 import gg.grounds.config.MessagesConfig
 import gg.grounds.grpc.player.LoginStatus
 import gg.grounds.grpc.player.PlayerLoginReply
-import gg.grounds.player.presence.PlayerLoginResult
+import gg.grounds.presence.PlayerLoginResult
 import gg.grounds.presence.PlayerPresenceService
 import java.util.UUID
 import net.kyori.adventure.text.Component

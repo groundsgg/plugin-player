@@ -1,11 +1,11 @@
-package gg.grounds.player.presence
+package gg.grounds.presence
 
+import gg.grounds.grpc.BaseGrpcClient
 import gg.grounds.grpc.player.PlayerLoginRequest
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.grpc.player.PlayerLogoutRequest
 import gg.grounds.grpc.player.PlayerPresenceServiceGrpc
 import io.grpc.ManagedChannel
-import io.grpc.ManagedChannelBuilder
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import java.util.UUID
@@ -13,9 +13,9 @@ import java.util.concurrent.TimeUnit
 
 class GrpcPlayerPresenceClient
 private constructor(
-    private val channel: ManagedChannel,
+    channel: ManagedChannel,
     private val stub: PlayerPresenceServiceGrpc.PlayerPresenceServiceBlockingStub,
-) : AutoCloseable {
+) : BaseGrpcClient(channel) {
     fun tryLogin(playerId: UUID): PlayerLoginResult {
         return try {
             val reply =
@@ -49,24 +49,9 @@ private constructor(
         }
     }
 
-    override fun close() {
-        channel.shutdown()
-        try {
-            if (!channel.awaitTermination(3, TimeUnit.SECONDS)) {
-                channel.shutdownNow()
-                channel.awaitTermination(3, TimeUnit.SECONDS)
-            }
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
-            channel.shutdownNow()
-        }
-    }
-
     companion object {
         fun create(target: String): GrpcPlayerPresenceClient {
-            val channelBuilder = ManagedChannelBuilder.forTarget(target)
-            channelBuilder.usePlaintext()
-            val channel = channelBuilder.build()
+            val channel = createChannel(target)
             val stub = PlayerPresenceServiceGrpc.newBlockingStub(channel)
             return GrpcPlayerPresenceClient(channel, stub)
         }
