@@ -2,7 +2,7 @@ plugins { id("gg.grounds.velocity-conventions") }
 
 dependencies {
     implementation(project(":common"))
-    implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.0.4")
+    implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.1.0")
     implementation("tools.jackson.module:jackson-module-kotlin:3.0.4")
     implementation("io.grpc:grpc-netty-shaded:1.78.0")
 
