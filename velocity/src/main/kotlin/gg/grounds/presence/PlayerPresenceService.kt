@@ -8,7 +8,12 @@ import java.util.UUID
 class PlayerPresenceService : AutoCloseable {
     private lateinit var client: GrpcPlayerPresenceClient
 
-    data class HeartbeatBatchResult(val success: Boolean, val message: String)
+    data class HeartbeatBatchResult(
+        val success: Boolean,
+        val message: String,
+        val updated: Int,
+        val missing: Int,
+    )
 
     fun configure(target: String) {
         close()
@@ -34,9 +39,14 @@ class PlayerPresenceService : AutoCloseable {
     fun heartbeatBatch(playerIds: Collection<UUID>): HeartbeatBatchResult {
         return try {
             val reply = client.heartbeatBatch(playerIds)
-            HeartbeatBatchResult(reply.success, reply.message)
+            HeartbeatBatchResult(reply.success, reply.message, reply.updated, reply.missing)
         } catch (e: RuntimeException) {
-            HeartbeatBatchResult(false, e.message ?: e::class.java.name)
+            HeartbeatBatchResult(
+                success = false,
+                message = e.message ?: e::class.java.name,
+                updated = 0,
+                missing = playerIds.size,
+            )
         }
     }
 
