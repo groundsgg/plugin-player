@@ -1,4 +1,4 @@
-serviceUnavailable: "Login service unavailable"
-alreadyOnline: "You are already online."
+serviceUnavailable: "Grounds Login services are currently unavailable"
+alreadyOnline: "You are already online on Grounds network."
 invalidRequest: "Invalid login request."
 genericError: "Unable to create player session."

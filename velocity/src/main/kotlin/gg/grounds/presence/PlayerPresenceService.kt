@@ -1,8 +1,6 @@
 package gg.grounds.presence
 
 import gg.grounds.grpc.player.PlayerLogoutReply
-import gg.grounds.player.presence.GrpcPlayerPresenceClient
-import gg.grounds.player.presence.PlayerLoginResult
 import java.util.UUID
 
 class PlayerPresenceService : AutoCloseable {
