@@ -1,5 +1,7 @@
 package gg.grounds.player.presence
 
+import gg.grounds.grpc.player.PlayerHeartbeatBatchReply
+import gg.grounds.grpc.player.PlayerHeartbeatBatchRequest
 import gg.grounds.grpc.player.PlayerLoginRequest
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.grpc.player.PlayerLogoutRequest
@@ -49,6 +51,22 @@ private constructor(
         }
     }
 
+    fun heartbeatBatch(playerIds: Collection<UUID>): PlayerHeartbeatBatchReply {
+        return try {
+            val request =
+                PlayerHeartbeatBatchRequest.newBuilder()
+                    .addAllPlayerIds(playerIds.map { it.toString() })
+                    .build()
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .playerHeartbeatBatch(request)
+        } catch (e: StatusRuntimeException) {
+            errorHeartbeatBatchReply(e.status.toString())
+        } catch (e: RuntimeException) {
+            errorHeartbeatBatchReply(e.message ?: e::class.java.name)
+        }
+    }
+
     override fun close() {
         channel.shutdown()
         try {
@@ -73,6 +91,14 @@ private constructor(
 
         private fun errorLogoutReply(message: String): PlayerLogoutReply =
             PlayerLogoutReply.newBuilder().setRemoved(false).setMessage(message).build()
+
+        private fun errorHeartbeatBatchReply(message: String): PlayerHeartbeatBatchReply =
+            PlayerHeartbeatBatchReply.newBuilder()
+                .setUpdated(0)
+                .setMissing(0)
+                .setSuccess(false)
+                .setMessage(message)
+                .build()
 
         private fun isServiceUnavailable(status: Status.Code): Boolean =
             status == Status.Code.UNAVAILABLE || status == Status.Code.DEADLINE_EXCEEDED

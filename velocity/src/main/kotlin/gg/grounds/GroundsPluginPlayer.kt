@@ -9,6 +9,7 @@ import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
 import gg.grounds.config.MessagesConfigLoader
 import gg.grounds.listener.PlayerConnectionListener
+import gg.grounds.presence.PlayerHeartbeatScheduler
 import gg.grounds.presence.PlayerPresenceService
 import io.grpc.LoadBalancerRegistry
 import io.grpc.NameResolverRegistry
@@ -33,6 +34,8 @@ constructor(
     @param:DataDirectory private val dataDirectory: Path,
 ) {
     private val playerPresenceService = PlayerPresenceService()
+    private val heartbeatScheduler =
+        PlayerHeartbeatScheduler(this, proxy, logger, playerPresenceService)
 
     init {
         logger.info("Initialized plugin (plugin=plugin-player, version={})", BuildInfo.VERSION)
@@ -55,11 +58,13 @@ constructor(
             ),
         )
 
+        heartbeatScheduler.start()
         logger.info("Configured player presence gRPC client (target={})", target)
     }
 
     @Subscribe
     fun onShutdown(event: ProxyShutdownEvent) {
+        heartbeatScheduler.stop()
         playerPresenceService.close()
     }
 
