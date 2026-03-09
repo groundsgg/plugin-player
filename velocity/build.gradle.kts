@@ -6,7 +6,7 @@ dependencies {
     implementation("tools.jackson.module:jackson-module-kotlin:3.0.4")
     implementation("io.grpc:grpc-netty-shaded:1.78.0")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.4")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:6.0.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
 }
