@@ -1,6 +1,7 @@
 package gg.grounds.presence
 
 import gg.grounds.grpc.player.PlayerLogoutReply
+import gg.grounds.grpc.player.PlayerSessionInfo
 import gg.grounds.player.presence.GrpcPlayerPresenceClient
 import gg.grounds.player.presence.PlayerLoginResult
 import java.util.UUID
@@ -20,11 +21,47 @@ class PlayerPresenceService : AutoCloseable {
         client = GrpcPlayerPresenceClient.create(target)
     }
 
-    fun tryLogin(playerId: UUID): PlayerLoginResult {
+    fun tryLogin(playerId: UUID, playerName: String, proxyId: String): PlayerLoginResult {
         return try {
-            client.tryLogin(playerId)
+            client.tryLogin(playerId, playerName, proxyId)
         } catch (e: RuntimeException) {
             PlayerLoginResult.Error(e.message ?: e::class.java.name)
+        }
+    }
+
+    /**
+     * Cross-proxy lookups. Never throw: a failure means "unknown", and the caller falls back to
+     * local.
+     */
+    fun getSession(playerId: UUID): PlayerSessionInfo? {
+        return try {
+            client.getSession(playerId)
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    fun resolveName(playerName: String): PlayerSessionInfo? {
+        return try {
+            client.resolveName(playerName)
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    fun suggestNames(prefix: String, limit: Int): List<String> {
+        return try {
+            client.suggestNames(prefix, limit)
+        } catch (e: RuntimeException) {
+            emptyList()
+        }
+    }
+
+    fun updateServer(playerId: UUID, serverName: String): Boolean {
+        return try {
+            client.updateServer(playerId, serverName)
+        } catch (e: RuntimeException) {
+            false
         }
     }
 

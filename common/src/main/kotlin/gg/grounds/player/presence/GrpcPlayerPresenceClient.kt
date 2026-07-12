@@ -1,11 +1,16 @@
 package gg.grounds.player.presence
 
+import gg.grounds.grpc.player.GetPlayerSessionRequest
 import gg.grounds.grpc.player.PlayerHeartbeatBatchReply
 import gg.grounds.grpc.player.PlayerHeartbeatBatchRequest
 import gg.grounds.grpc.player.PlayerLoginRequest
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.grpc.player.PlayerLogoutRequest
 import gg.grounds.grpc.player.PlayerPresenceServiceGrpc
+import gg.grounds.grpc.player.PlayerSessionInfo
+import gg.grounds.grpc.player.ResolvePlayerNameRequest
+import gg.grounds.grpc.player.SuggestPlayerNamesRequest
+import gg.grounds.grpc.player.UpdatePlayerServerRequest
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.Status
@@ -18,13 +23,17 @@ private constructor(
     private val channel: ManagedChannel,
     private val stub: PlayerPresenceServiceGrpc.PlayerPresenceServiceBlockingStub,
 ) : AutoCloseable {
-    fun tryLogin(playerId: UUID): PlayerLoginResult {
+    fun tryLogin(playerId: UUID, playerName: String = "", proxyId: String = ""): PlayerLoginResult {
         return try {
             val reply =
                 stub
                     .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                     .tryPlayerLogin(
-                        PlayerLoginRequest.newBuilder().setPlayerId(playerId.toString()).build()
+                        PlayerLoginRequest.newBuilder()
+                            .setPlayerId(playerId.toString())
+                            .setPlayerName(playerName)
+                            .setProxyId(proxyId)
+                            .build()
                     )
             PlayerLoginResult.Success(reply)
         } catch (e: StatusRuntimeException) {
@@ -67,6 +76,70 @@ private constructor(
         }
     }
 
+    /**
+     * The lookups below back cross-proxy features, and they run on the command path (`/msg`,
+     * tab-complete). A failure means "I don't know", never an exception into Velocity's event loop
+     * — the caller then falls back to what it can see locally.
+     */
+    fun getSession(playerId: UUID): PlayerSessionInfo? {
+        return try {
+            val reply =
+                stub
+                    .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                    .getPlayerSession(
+                        GetPlayerSessionRequest.newBuilder()
+                            .setPlayerId(playerId.toString())
+                            .build()
+                    )
+            if (reply.found) reply.session else null
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    fun resolveName(playerName: String): PlayerSessionInfo? {
+        return try {
+            val reply =
+                stub
+                    .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                    .resolvePlayerName(
+                        ResolvePlayerNameRequest.newBuilder().setPlayerName(playerName).build()
+                    )
+            if (reply.found) reply.session else null
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    fun suggestNames(prefix: String, limit: Int): List<String> {
+        return try {
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .suggestPlayerNames(
+                    SuggestPlayerNamesRequest.newBuilder().setPrefix(prefix).setLimit(limit).build()
+                )
+                .playerNamesList
+        } catch (e: RuntimeException) {
+            emptyList()
+        }
+    }
+
+    fun updateServer(playerId: UUID, serverName: String): Boolean {
+        return try {
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .updatePlayerServer(
+                    UpdatePlayerServerRequest.newBuilder()
+                        .setPlayerId(playerId.toString())
+                        .setServerName(serverName)
+                        .build()
+                )
+                .updated
+        } catch (e: RuntimeException) {
+            false
+        }
+    }
+
     override fun close() {
         channel.shutdown()
         try {
@@ -84,6 +157,10 @@ private constructor(
         fun create(target: String): GrpcPlayerPresenceClient {
             val channelBuilder = ManagedChannelBuilder.forTarget(target)
             channelBuilder.usePlaintext()
+            // service-player rejects tokenless calls with UNAUTHENTICATED, and every failure here
+            // is
+            // swallowed into "unknown" — so without this the whole presence chain fails silently.
+            channelBuilder.intercept(GroundsTokenInterceptor())
             val channel = channelBuilder.build()
             val stub = PlayerPresenceServiceGrpc.newBlockingStub(channel)
             return GrpcPlayerPresenceClient(channel, stub)

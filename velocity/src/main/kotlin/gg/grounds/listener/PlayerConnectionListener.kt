@@ -4,6 +4,7 @@ import com.velocitypowered.api.event.EventTask
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.DisconnectEvent
 import com.velocitypowered.api.event.connection.PreLoginEvent
+import com.velocitypowered.api.event.player.ServerConnectedEvent
 import com.velocitypowered.api.util.UuidUtils
 import gg.grounds.config.MessagesConfig
 import gg.grounds.grpc.player.LoginStatus
@@ -25,7 +26,9 @@ class PlayerConnectionListener(
         val playerId = event.uniqueId ?: UuidUtils.generateOfflinePlayerUuid(name)
 
         return EventTask.async {
-            when (val result = playerPresenceService.tryLogin(playerId)) {
+            // The name is what makes the session findable from another proxy — without it a player
+            // exists in presence but nobody can /msg them. PROXY_ID says which proxy holds them.
+            when (val result = playerPresenceService.tryLogin(playerId, name, proxyId())) {
                 is PlayerLoginResult.Success -> {
                     if (handleSuccess(event, name, playerId, result.reply)) {
                         return@async
@@ -117,4 +120,17 @@ class PlayerConnectionListener(
     private fun deny(event: PreLoginEvent, message: String) {
         event.result = PreLoginEvent.PreLoginComponentResult.denied(Component.text(message))
     }
+
+    /**
+     * Keep the session pointing at the backend the player is actually on — a party warp wants to
+     * send someone to the leader's server, and that only works if we know where people are.
+     */
+    @Subscribe
+    fun onServerConnected(event: ServerConnectedEvent): EventTask {
+        val playerId = event.player.uniqueId
+        val serverName = event.server.serverInfo.name
+        return EventTask.async { playerPresenceService.updateServer(playerId, serverName) }
+    }
+
+    private fun proxyId(): String = System.getenv("PROXY_ID") ?: ""
 }
