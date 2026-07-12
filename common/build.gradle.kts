@@ -10,4 +10,4 @@ repositories {
     }
 }
 
-dependencies { protobuf("gg.grounds:library-grpc-contracts-player:0.2.0") }
+dependencies { protobuf("gg.grounds:library-grpc-contracts-player:0.3.0") }

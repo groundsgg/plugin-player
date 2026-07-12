@@ -4,6 +4,7 @@ import com.google.inject.Inject
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent
+import com.velocitypowered.api.plugin.Dependency
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
@@ -11,6 +12,9 @@ import gg.grounds.config.MessagesConfigLoader
 import gg.grounds.listener.PlayerConnectionListener
 import gg.grounds.presence.PlayerHeartbeatScheduler
 import gg.grounds.presence.PlayerPresenceService
+import gg.grounds.presence.PlayerSessionQueryImpl
+import gg.grounds.proxy.api.PlayerSessionQuery
+import gg.grounds.proxy.api.ProxyServiceRegistry
 import io.grpc.LoadBalancerRegistry
 import io.grpc.NameResolverRegistry
 import io.grpc.internal.DnsNameResolverProvider
@@ -25,6 +29,8 @@ import org.slf4j.Logger
     description = "A plugin which manages player related actions and data transactions",
     authors = ["Grounds Development Team and contributors"],
     url = "https://github.com/groundsgg/plugin-player",
+    // plugin-proxy owns the ProxyServiceRegistry this plugin publishes its session lookup into.
+    dependencies = [Dependency(id = "plugin-proxy")],
 )
 class GroundsPluginPlayer
 @Inject
@@ -58,12 +64,21 @@ constructor(
             ),
         )
 
+        // Publish the network-wide player lookup. plugin-proxy's ProxyService falls back to this
+        // for
+        // anyone who is not on this proxy — it is what lets chat and social reach across proxies.
+        ProxyServiceRegistry.register(
+            PlayerSessionQuery::class.java,
+            PlayerSessionQueryImpl(playerPresenceService),
+        )
+
         heartbeatScheduler.start()
         logger.info("Configured player presence gRPC client (target={})", target)
     }
 
     @Subscribe
     fun onShutdown(event: ProxyShutdownEvent) {
+        ProxyServiceRegistry.unregister(PlayerSessionQuery::class.java)
         heartbeatScheduler.stop()
         playerPresenceService.close()
     }
