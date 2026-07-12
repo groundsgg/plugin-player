@@ -157,6 +157,10 @@ private constructor(
         fun create(target: String): GrpcPlayerPresenceClient {
             val channelBuilder = ManagedChannelBuilder.forTarget(target)
             channelBuilder.usePlaintext()
+            // service-player rejects tokenless calls with UNAUTHENTICATED, and every failure here
+            // is
+            // swallowed into "unknown" — so without this the whole presence chain fails silently.
+            channelBuilder.intercept(GroundsTokenInterceptor())
             val channel = channelBuilder.build()
             val stub = PlayerPresenceServiceGrpc.newBlockingStub(channel)
             return GrpcPlayerPresenceClient(channel, stub)
