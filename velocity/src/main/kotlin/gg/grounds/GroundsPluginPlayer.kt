@@ -8,7 +8,10 @@ import com.velocitypowered.api.plugin.Dependency
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
+import gg.grounds.config.MessagesConfig
 import gg.grounds.config.MessagesConfigLoader
+import gg.grounds.link.ForgeLinkClient
+import gg.grounds.link.LinkCommand
 import gg.grounds.listener.PlayerConnectionListener
 import gg.grounds.presence.PlayerHeartbeatScheduler
 import gg.grounds.presence.PlayerPresenceService
@@ -72,8 +75,37 @@ constructor(
             PlayerSessionQueryImpl(playerPresenceService),
         )
 
+        registerLinkCommands(messages)
+
         heartbeatScheduler.start()
         logger.info("Configured player presence gRPC client (target={})", target)
+    }
+
+    /**
+     * /link + /unlink talk to forge over HTTP, which needs the platform context forge injects into
+     * pushed workloads. Outside that context (a bare local proxy, say) the env vars are absent —
+     * skip the commands rather than register ones that can only ever fail.
+     */
+    private fun registerLinkCommands(messages: MessagesConfig) {
+        val forgeUrl = System.getenv("GROUNDS_FORGE_URL")?.trim()?.trimEnd('/')
+        if (forgeUrl.isNullOrEmpty()) {
+            logger.info("GROUNDS_FORGE_URL is not set; /link is unavailable")
+            return
+        }
+
+        // Read the token per call, not once here: it comes from a mounted Secret and holding it in
+        // a field is how credentials end up in logs.
+        val client =
+            ForgeLinkClient(
+                forgeUrl = forgeUrl,
+                tokenProvider = {
+                    System.getenv("GROUNDS_TOKEN")?.trim()?.takeIf { it.isNotEmpty() }
+                },
+            )
+
+        proxy.commandManager.register(LinkCommand.create(client, messages, logger))
+        proxy.commandManager.register(LinkCommand.createUnlink(client, messages, logger))
+        logger.info("Registered /link and /unlink (forgeUrl={})", forgeUrl)
     }
 
     @Subscribe
