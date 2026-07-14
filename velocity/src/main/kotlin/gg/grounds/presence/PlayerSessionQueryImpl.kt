@@ -1,5 +1,7 @@
 package gg.grounds.presence
 
+import gg.grounds.grpc.player.CountPlayersByServerReply
+import gg.grounds.proxy.api.NetworkPlayerCounts
 import gg.grounds.proxy.api.PlayerSessionInfo
 import gg.grounds.proxy.api.PlayerSessionQuery
 import java.util.UUID
@@ -23,6 +25,9 @@ class PlayerSessionQueryImpl(private val presenceService: PlayerPresenceService)
     override fun suggestNames(prefix: String, limit: Int): List<String> =
         presenceService.suggestNames(prefix, limit)
 
+    override fun countPlayersByServer(): NetworkPlayerCounts? =
+        presenceService.countPlayersByServer()?.let(::toNetworkPlayerCounts)
+
     /**
      * A session with no usable id or name tells the caller nothing — drop it rather than
      * half-answer.
@@ -38,4 +43,14 @@ class PlayerSessionQueryImpl(private val presenceService: PlayerPresenceService)
             connectedAt = session.connectedAtMillis,
         )
     }
+
+    /**
+     * `servers` has one row per occupied backend server — a server nobody is on is absent, not a
+     * zero entry.
+     */
+    internal fun toNetworkPlayerCounts(reply: CountPlayersByServerReply): NetworkPlayerCounts =
+        NetworkPlayerCounts(
+            byServer = reply.serversList.associate { it.serverName to it.players },
+            total = reply.total,
+        )
 }
