@@ -64,6 +64,8 @@ constructor(
                 logger = logger,
                 playerPresenceService = playerPresenceService,
                 messages = messages,
+                proxy = proxy,
+                plugin = this,
             ),
         )
 
