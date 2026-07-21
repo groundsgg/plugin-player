@@ -1,5 +1,7 @@
 package gg.grounds.player.presence
 
+import gg.grounds.grpc.player.CountPlayersByServerReply
+import gg.grounds.grpc.player.CountPlayersByServerRequest
 import gg.grounds.grpc.player.GetPlayerSessionRequest
 import gg.grounds.grpc.player.PlayerHeartbeatBatchReply
 import gg.grounds.grpc.player.PlayerHeartbeatBatchRequest
@@ -121,6 +123,16 @@ private constructor(
                 .playerNamesList
         } catch (e: RuntimeException) {
             emptyList()
+        }
+    }
+
+    fun countPlayersByServer(): CountPlayersByServerReply? {
+        return try {
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .countPlayersByServer(CountPlayersByServerRequest.newBuilder().build())
+        } catch (e: RuntimeException) {
+            null
         }
     }
 

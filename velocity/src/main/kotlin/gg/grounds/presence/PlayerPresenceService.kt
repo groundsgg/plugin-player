@@ -1,5 +1,6 @@
 package gg.grounds.presence
 
+import gg.grounds.grpc.player.CountPlayersByServerReply
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.grpc.player.PlayerSessionInfo
 import gg.grounds.player.presence.GrpcPlayerPresenceClient
@@ -54,6 +55,14 @@ class PlayerPresenceService : AutoCloseable {
             client.suggestNames(prefix, limit)
         } catch (e: RuntimeException) {
             emptyList()
+        }
+    }
+
+    fun countPlayersByServer(): CountPlayersByServerReply? {
+        return try {
+            client.countPlayersByServer()
+        } catch (e: RuntimeException) {
+            null
         }
     }
 
