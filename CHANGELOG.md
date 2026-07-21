@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/groundsgg/plugin-player/compare/v0.2.0...v0.3.0) (2026-07-21)
+
+
+### Features
+
+* **presence:** count players by server across the network ([#24](https://github.com/groundsgg/plugin-player/issues/24)) ([1fe0b62](https://github.com/groundsgg/plugin-player/commit/1fe0b62cb69d15c0f7c4905248ee6be08cfe8854))
+
+
+### Bug Fixes
+
+* **presence:** release the session when a login never arrives ([#25](https://github.com/groundsgg/plugin-player/issues/25)) ([1440647](https://github.com/groundsgg/plugin-player/commit/14406471218567f327e4919c15912ee296b6650f))
+
 ## [0.2.0](https://github.com/groundsgg/plugin-player/compare/v0.1.0...v0.2.0) (2026-07-13)
 
 
