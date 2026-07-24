@@ -11,7 +11,7 @@ repositories {
 }
 
 dependencies {
-    protobuf("gg.grounds:library-grpc-contracts-player:0.4.0")
+    protobuf("gg.grounds:library-grpc-contracts-player:0.5.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.4")

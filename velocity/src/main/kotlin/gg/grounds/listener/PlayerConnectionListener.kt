@@ -46,7 +46,9 @@ class PlayerConnectionListener(
         return EventTask.async {
             // The name is what makes the session findable from another proxy — without it a player
             // exists in presence but nobody can /msg them. PROXY_ID says which proxy holds them.
-            when (val result = playerPresenceService.tryLogin(playerId, name, proxyId())) {
+            when (
+                val result = playerPresenceService.tryLogin(playerId, name, proxyId(), region())
+            ) {
                 is PlayerLoginResult.Success -> {
                     if (handleSuccess(event, name, playerId, result.reply)) {
                         return@async
@@ -159,6 +161,13 @@ class PlayerConnectionListener(
     }
 
     private fun proxyId(): String = System.getenv("PROXY_ID") ?: ""
+
+    /**
+     * Empty when the proxy declares no region. Passed through as-is rather than defaulted to
+     * something plausible: an invented location is worse than an absent one, and the session schema
+     * treats unknown as a normal value.
+     */
+    private fun region(): String = System.getenv("REGION") ?: ""
 
     private fun watchForAbandonedLogin(playerId: UUID, name: String) {
         pendingLogins.add(playerId)
