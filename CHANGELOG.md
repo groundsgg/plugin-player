@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/groundsgg/plugin-player/compare/v0.3.0...v0.4.0) (2026-07-24)
+
+
+### Features
+
+* **presence:** report the proxy's region, and count players by proxy ([#27](https://github.com/groundsgg/plugin-player/issues/27)) ([7f75835](https://github.com/groundsgg/plugin-player/commit/7f758350e7b1752316ca8ebe2d4a7fea42a4d224))
+
 ## [0.3.0](https://github.com/groundsgg/plugin-player/compare/v0.2.0...v0.3.0) (2026-07-21)
 
 
