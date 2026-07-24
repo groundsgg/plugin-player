@@ -1,5 +1,6 @@
 package gg.grounds.presence
 
+import gg.grounds.grpc.player.CountPlayersByProxyReply
 import gg.grounds.grpc.player.CountPlayersByServerReply
 import gg.grounds.grpc.player.PlayerLogoutReply
 import gg.grounds.grpc.player.PlayerSessionInfo
@@ -22,9 +23,14 @@ class PlayerPresenceService : AutoCloseable {
         client = GrpcPlayerPresenceClient.create(target)
     }
 
-    fun tryLogin(playerId: UUID, playerName: String, proxyId: String): PlayerLoginResult {
+    fun tryLogin(
+        playerId: UUID,
+        playerName: String,
+        proxyId: String,
+        region: String,
+    ): PlayerLoginResult {
         return try {
-            client.tryLogin(playerId, playerName, proxyId)
+            client.tryLogin(playerId, playerName, proxyId, region)
         } catch (e: RuntimeException) {
             PlayerLoginResult.Error(e.message ?: e::class.java.name)
         }
@@ -61,6 +67,14 @@ class PlayerPresenceService : AutoCloseable {
     fun countPlayersByServer(): CountPlayersByServerReply? {
         return try {
             client.countPlayersByServer()
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    fun countPlayersByProxy(): CountPlayersByProxyReply? {
+        return try {
+            client.countPlayersByProxy()
         } catch (e: RuntimeException) {
             null
         }

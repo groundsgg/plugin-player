@@ -1,5 +1,7 @@
 package gg.grounds.player.presence
 
+import gg.grounds.grpc.player.CountPlayersByProxyReply
+import gg.grounds.grpc.player.CountPlayersByProxyRequest
 import gg.grounds.grpc.player.CountPlayersByServerReply
 import gg.grounds.grpc.player.CountPlayersByServerRequest
 import gg.grounds.grpc.player.GetPlayerSessionRequest
@@ -25,7 +27,12 @@ private constructor(
     private val channel: ManagedChannel,
     private val stub: PlayerPresenceServiceGrpc.PlayerPresenceServiceBlockingStub,
 ) : AutoCloseable {
-    fun tryLogin(playerId: UUID, playerName: String = "", proxyId: String = ""): PlayerLoginResult {
+    fun tryLogin(
+        playerId: UUID,
+        playerName: String = "",
+        proxyId: String = "",
+        region: String = "",
+    ): PlayerLoginResult {
         return try {
             val reply =
                 stub
@@ -35,6 +42,7 @@ private constructor(
                             .setPlayerId(playerId.toString())
                             .setPlayerName(playerName)
                             .setProxyId(proxyId)
+                            .setRegion(region)
                             .build()
                     )
             PlayerLoginResult.Success(reply)
@@ -131,6 +139,16 @@ private constructor(
             stub
                 .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .countPlayersByServer(CountPlayersByServerRequest.newBuilder().build())
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    fun countPlayersByProxy(): CountPlayersByProxyReply? {
+        return try {
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .countPlayersByProxy(CountPlayersByProxyRequest.newBuilder().build())
         } catch (e: RuntimeException) {
             null
         }

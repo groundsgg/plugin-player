@@ -1,9 +1,12 @@
 package gg.grounds.presence
 
+import gg.grounds.grpc.player.CountPlayersByProxyReply
 import gg.grounds.grpc.player.CountPlayersByServerReply
 import gg.grounds.proxy.api.NetworkPlayerCounts
+import gg.grounds.proxy.api.NetworkProxyCounts
 import gg.grounds.proxy.api.PlayerSessionInfo
 import gg.grounds.proxy.api.PlayerSessionQuery
+import gg.grounds.proxy.api.ProxyPlayers
 import java.util.UUID
 
 /**
@@ -28,6 +31,9 @@ class PlayerSessionQueryImpl(private val presenceService: PlayerPresenceService)
     override fun countPlayersByServer(): NetworkPlayerCounts? =
         presenceService.countPlayersByServer()?.let(::toNetworkPlayerCounts)
 
+    override fun countPlayersByProxy(): NetworkProxyCounts? =
+        presenceService.countPlayersByProxy()?.let(::toNetworkProxyCounts)
+
     /**
      * A session with no usable id or name tells the caller nothing — drop it rather than
      * half-answer.
@@ -41,6 +47,7 @@ class PlayerSessionQueryImpl(private val presenceService: PlayerPresenceService)
             proxyId = session.proxyId.takeIf { it.isNotEmpty() },
             server = session.serverName.takeIf { it.isNotEmpty() },
             connectedAt = session.connectedAtMillis,
+            region = session.region.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -48,6 +55,19 @@ class PlayerSessionQueryImpl(private val presenceService: PlayerPresenceService)
      * `servers` has one row per occupied backend server — a server nobody is on is absent, not a
      * zero entry.
      */
+    /**
+     * `proxies` has one row per occupied proxy. An empty region string means the proxy declares
+     * none — mapped to null rather than kept as "", so callers have one shape for "unknown".
+     */
+    internal fun toNetworkProxyCounts(reply: CountPlayersByProxyReply): NetworkProxyCounts =
+        NetworkProxyCounts(
+            proxies =
+                reply.proxiesList.map {
+                    ProxyPlayers(it.proxyId, it.region.takeIf(String::isNotEmpty), it.players)
+                },
+            total = reply.total,
+        )
+
     internal fun toNetworkPlayerCounts(reply: CountPlayersByServerReply): NetworkPlayerCounts =
         NetworkPlayerCounts(
             byServer = reply.serversList.associate { it.serverName to it.players },
