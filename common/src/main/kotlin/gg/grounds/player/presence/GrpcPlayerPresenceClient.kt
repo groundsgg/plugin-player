@@ -4,6 +4,7 @@ import gg.grounds.grpc.player.CountPlayersByProxyReply
 import gg.grounds.grpc.player.CountPlayersByProxyRequest
 import gg.grounds.grpc.player.CountPlayersByServerReply
 import gg.grounds.grpc.player.CountPlayersByServerRequest
+import gg.grounds.grpc.player.GetPlayerLocaleRequest
 import gg.grounds.grpc.player.GetPlayerSessionRequest
 import gg.grounds.grpc.player.PlayerHeartbeatBatchReply
 import gg.grounds.grpc.player.PlayerHeartbeatBatchRequest
@@ -13,6 +14,7 @@ import gg.grounds.grpc.player.PlayerLogoutRequest
 import gg.grounds.grpc.player.PlayerPresenceServiceGrpc
 import gg.grounds.grpc.player.PlayerSessionInfo
 import gg.grounds.grpc.player.ResolvePlayerNameRequest
+import gg.grounds.grpc.player.SetPlayerLocaleRequest
 import gg.grounds.grpc.player.SuggestPlayerNamesRequest
 import gg.grounds.grpc.player.UpdatePlayerServerRequest
 import io.grpc.ManagedChannel
@@ -180,6 +182,38 @@ private constructor(
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
             channel.shutdownNow()
+        }
+    }
+
+    /** The player's stored language tag, or null when they have chosen none. Never throws. */
+    fun getLocale(playerId: UUID): String? {
+        return try {
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .getPlayerLocale(
+                    GetPlayerLocaleRequest.newBuilder().setPlayerId(playerId.toString()).build()
+                )
+                .locale
+                .ifEmpty { null }
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    /** Persists (or, with a blank tag, clears) the player's language. Never throws. */
+    fun setLocale(playerId: UUID, locale: String): Boolean {
+        return try {
+            stub
+                .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                .setPlayerLocale(
+                    SetPlayerLocaleRequest.newBuilder()
+                        .setPlayerId(playerId.toString())
+                        .setLocale(locale)
+                        .build()
+                )
+                .updated
+        } catch (e: RuntimeException) {
+            false
         }
     }
 
