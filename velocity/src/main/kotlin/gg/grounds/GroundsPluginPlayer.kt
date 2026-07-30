@@ -13,9 +13,14 @@ import gg.grounds.config.MessagesConfigLoader
 import gg.grounds.link.ForgeLinkClient
 import gg.grounds.link.LinkCommand
 import gg.grounds.listener.PlayerConnectionListener
+import gg.grounds.locale.PlayerLocaleCache
+import gg.grounds.locale.PlayerLocaleQueryImpl
+import gg.grounds.locale.commands.LangCommand
+import gg.grounds.locale.listener.LocaleConnectionListener
 import gg.grounds.presence.PlayerHeartbeatScheduler
 import gg.grounds.presence.PlayerPresenceService
 import gg.grounds.presence.PlayerSessionQueryImpl
+import gg.grounds.proxy.api.PlayerLocaleQuery
 import gg.grounds.proxy.api.PlayerSessionQuery
 import gg.grounds.proxy.api.ProxyServiceRegistry
 import io.grpc.LoadBalancerRegistry
@@ -43,6 +48,7 @@ constructor(
     @param:DataDirectory private val dataDirectory: Path,
 ) {
     private val playerPresenceService = PlayerPresenceService()
+    private val playerLocaleCache = PlayerLocaleCache()
     private val heartbeatScheduler =
         PlayerHeartbeatScheduler(this, proxy, logger, playerPresenceService)
 
@@ -75,6 +81,20 @@ constructor(
         ProxyServiceRegistry.register(
             PlayerSessionQuery::class.java,
             PlayerSessionQueryImpl(playerPresenceService),
+        )
+
+        // Per-player language: seed the cache on join, publish it to localized plugins (social),
+        // and let the player change it with /lang.
+        proxy.eventManager.register(
+            this,
+            LocaleConnectionListener(playerLocaleCache, playerPresenceService),
+        )
+        ProxyServiceRegistry.register(
+            PlayerLocaleQuery::class.java,
+            PlayerLocaleQueryImpl(playerLocaleCache),
+        )
+        proxy.commandManager.register(
+            LangCommand.create(playerLocaleCache, playerPresenceService, logger)
         )
 
         registerLinkCommands(messages)
@@ -113,6 +133,8 @@ constructor(
     @Subscribe
     fun onShutdown(event: ProxyShutdownEvent) {
         ProxyServiceRegistry.unregister(PlayerSessionQuery::class.java)
+        ProxyServiceRegistry.unregister(PlayerLocaleQuery::class.java)
+        playerLocaleCache.clear()
         heartbeatScheduler.stop()
         playerPresenceService.close()
     }

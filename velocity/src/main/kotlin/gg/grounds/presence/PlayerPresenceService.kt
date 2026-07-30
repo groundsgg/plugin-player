@@ -110,6 +110,24 @@ class PlayerPresenceService : AutoCloseable {
         }
     }
 
+    /** The player's stored language tag, or null when none is set. Never throws. */
+    fun getLocale(playerId: UUID): String? {
+        return try {
+            client.getLocale(playerId)
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    /** Persists (or clears, with a blank tag) the player's language. Never throws. */
+    fun setLocale(playerId: UUID, locale: String): Boolean {
+        return try {
+            client.setLocale(playerId, locale)
+        } catch (e: RuntimeException) {
+            false
+        }
+    }
+
     override fun close() {
         if (this::client.isInitialized) {
             client.close()
