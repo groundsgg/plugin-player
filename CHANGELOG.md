@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/groundsgg/plugin-player/compare/v0.4.0...v0.5.0) (2026-07-30)
+
+
+### Features
+
+* /lang command with per-player, persisted language ([#29](https://github.com/groundsgg/plugin-player/issues/29)) ([7a5df7f](https://github.com/groundsgg/plugin-player/commit/7a5df7f49418d707ef2f4f00ffe60ad4fe59e94e))
+
 ## [0.4.0](https://github.com/groundsgg/plugin-player/compare/v0.3.0...v0.4.0) (2026-07-24)
 
 
