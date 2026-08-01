@@ -88,9 +88,9 @@ class PlayerPresenceService : AutoCloseable {
         }
     }
 
-    fun logout(playerId: UUID): PlayerLogoutReply? {
+    fun logout(playerId: UUID, proxyId: String = ""): PlayerLogoutReply? {
         return try {
-            client.logout(playerId)
+            client.logout(playerId, proxyId)
         } catch (e: RuntimeException) {
             null
         }
