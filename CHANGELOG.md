@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/groundsgg/plugin-player/compare/v0.5.0...v0.6.0) (2026-08-02)
+
+
+### Features
+
+* **presence:** send own proxy id with logout ([#31](https://github.com/groundsgg/plugin-player/issues/31)) ([d1f9896](https://github.com/groundsgg/plugin-player/commit/d1f9896e8dfaf7ea73ef10d9b6fbc1adec2d93c2))
+
 ## [0.5.0](https://github.com/groundsgg/plugin-player/compare/v0.4.0...v0.5.0) (2026-07-30)
 
 
