@@ -58,12 +58,20 @@ private constructor(
         }
     }
 
-    fun logout(playerId: UUID): PlayerLogoutReply {
+    /**
+     * [proxyId] scopes the delete to this proxy's own session: a logout that raced a proxy-to-proxy
+     * transfer must not remove the session the next proxy just created. Empty is legal (the service
+     * falls back to the old unconditional delete).
+     */
+    fun logout(playerId: UUID, proxyId: String = ""): PlayerLogoutReply {
         return try {
             stub
                 .withDeadlineAfter(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
                 .playerLogout(
-                    PlayerLogoutRequest.newBuilder().setPlayerId(playerId.toString()).build()
+                    PlayerLogoutRequest.newBuilder()
+                        .setPlayerId(playerId.toString())
+                        .setProxyId(proxyId)
+                        .build()
                 )
         } catch (e: StatusRuntimeException) {
             errorLogoutReply(e.status.toString())

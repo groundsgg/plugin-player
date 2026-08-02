@@ -89,7 +89,7 @@ class PlayerConnectionListener(
         val name = event.player.username
 
         return EventTask.async {
-            val result = playerPresenceService.logout(playerId) ?: return@async
+            val result = playerPresenceService.logout(playerId, proxyId()) ?: return@async
             if (result.removed) {
                 logger.info(
                     "Player session logout completed (playerId={}, username={}, message={})",
@@ -181,7 +181,7 @@ class PlayerConnectionListener(
         val online = proxy.getPlayer(playerId).isPresent
         if (!shouldReleaseAbandonedLogin(pendingLogins, playerId, online)) return
 
-        val result = playerPresenceService.logout(playerId)
+        val result = playerPresenceService.logout(playerId, proxyId())
         logger.info(
             "Player session released after abandoned login (playerId={}, username={}, removed={})",
             playerId,
