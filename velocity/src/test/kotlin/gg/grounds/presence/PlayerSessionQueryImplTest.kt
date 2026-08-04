@@ -1,7 +1,9 @@
 package gg.grounds.presence
 
-import gg.grounds.grpc.player.CountPlayersByServerReply
-import gg.grounds.grpc.player.ServerPlayerCount
+import gg.grounds.player.presence.ProxyPlayerCount
+import gg.grounds.player.presence.ProxyPlayerCounts
+import gg.grounds.player.presence.ServerPlayerCount
+import gg.grounds.player.presence.ServerPlayerCounts
 import java.net.ServerSocket
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -11,21 +13,35 @@ class PlayerSessionQueryImplTest {
 
     @Test
     fun countPlayersByServerMapsServersAndCarriesTotal() {
-        val reply =
-            CountPlayersByServerReply.newBuilder()
-                .addServers(
-                    ServerPlayerCount.newBuilder().setServerName("lobby-1").setPlayers(2).build()
-                )
-                .addServers(
-                    ServerPlayerCount.newBuilder().setServerName("lobby-2").setPlayers(5).build()
-                )
-                .setTotal(8)
-                .build()
+        val counts =
+            ServerPlayerCounts(
+                servers = listOf(ServerPlayerCount("lobby-1", 2), ServerPlayerCount("lobby-2", 5)),
+                total = 8,
+            )
 
-        val counts = PlayerSessionQueryImpl(PlayerPresenceService()).toNetworkPlayerCounts(reply)
+        val mapped = PlayerSessionQueryImpl(PlayerPresenceService()).toNetworkPlayerCounts(counts)
 
-        assertEquals(mapOf("lobby-1" to 2, "lobby-2" to 5), counts.byServer)
-        assertEquals(8, counts.total)
+        assertEquals(mapOf("lobby-1" to 2, "lobby-2" to 5), mapped.byServer)
+        assertEquals(8, mapped.total)
+    }
+
+    @Test
+    fun countPlayersByProxyKeepsAnAbsentRegionAbsent() {
+        val counts =
+            ProxyPlayerCounts(
+                proxies =
+                    listOf(
+                        ProxyPlayerCount("velocity-1", "nl-ams1", 3),
+                        ProxyPlayerCount("velocity-2", null, 1),
+                    ),
+                total = 4,
+            )
+
+        val mapped = PlayerSessionQueryImpl(PlayerPresenceService()).toNetworkProxyCounts(counts)
+
+        assertEquals("nl-ams1", mapped.proxies[0].region)
+        assertNull(mapped.proxies[1].region)
+        assertEquals(4, mapped.total)
     }
 
     @Test
