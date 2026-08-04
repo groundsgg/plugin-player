@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/groundsgg/plugin-player/compare/v0.6.0...v1.0.0) (2026-08-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* **presence:** PLAYER_PRESENCE_GRPC_TARGET is replaced by PLAYER_SERVICE_URL. The deploy must set it in the same change that ships this jar; a proxy without it fails at startup rather than at the first login.
+
+### Features
+
+* **presence:** talk to service-player over HTTP ([#33](https://github.com/groundsgg/plugin-player/issues/33)) ([3716964](https://github.com/groundsgg/plugin-player/commit/3716964dc4ca259a8a36ff2a2c0f9b60b3d32aa1))
+
 ## [0.6.0](https://github.com/groundsgg/plugin-player/compare/v0.5.0...v0.6.0) (2026-08-02)
 
 
