@@ -23,10 +23,6 @@ import gg.grounds.presence.PlayerSessionQueryImpl
 import gg.grounds.proxy.api.PlayerLocaleQuery
 import gg.grounds.proxy.api.PlayerSessionQuery
 import gg.grounds.proxy.api.ProxyServiceRegistry
-import io.grpc.LoadBalancerRegistry
-import io.grpc.NameResolverRegistry
-import io.grpc.internal.DnsNameResolverProvider
-import io.grpc.internal.PickFirstLoadBalancerProvider
 import java.nio.file.Path
 import org.slf4j.Logger
 
@@ -58,11 +54,9 @@ constructor(
 
     @Subscribe
     fun onInitialize(event: ProxyInitializeEvent) {
-        registerProviders()
-
         val messages = MessagesConfigLoader(logger, dataDirectory).loadOrCreate()
-        val target = resolveTarget()
-        playerPresenceService.configure(target)
+        val serviceUrl = resolveServiceUrl()
+        playerPresenceService.configure(serviceUrl)
 
         proxy.eventManager.register(
             this,
@@ -100,7 +94,7 @@ constructor(
         registerLinkCommands(messages)
 
         heartbeatScheduler.start()
-        logger.info("Configured player presence gRPC client (target={})", target)
+        logger.info("Configured player presence client (serviceUrl={})", serviceUrl)
     }
 
     /**
@@ -140,18 +134,11 @@ constructor(
     }
 
     /**
-     * Registers gRPC name resolver and load balancer providers so client channels can resolve DNS
-     * targets and select endpoints when running inside Velocity's shaded environment. This manual
-     * step avoids startup IllegalArgumentExceptions caused by shaded classes not being discoverable
-     * via the default provider lookup.
+     * Where service-player answers. Required: a proxy that cannot reach presence cannot decide
+     * whether a player may join, and failing at startup says so louder than every login failing.
      */
-    private fun registerProviders() {
-        NameResolverRegistry.getDefaultRegistry().register(DnsNameResolverProvider())
-        LoadBalancerRegistry.getDefaultRegistry().register(PickFirstLoadBalancerProvider())
-    }
-
-    private fun resolveTarget(): String {
-        return System.getenv("PLAYER_PRESENCE_GRPC_TARGET")?.takeIf { it.isNotBlank() }
-            ?: error("Missing required environment variable PLAYER_PRESENCE_GRPC_TARGET")
+    private fun resolveServiceUrl(): String {
+        return System.getenv("PLAYER_SERVICE_URL")?.takeIf { it.isNotBlank() }
+            ?: error("Missing required environment variable PLAYER_SERVICE_URL")
     }
 }

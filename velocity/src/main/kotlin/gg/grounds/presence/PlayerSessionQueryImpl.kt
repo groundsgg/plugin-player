@@ -1,7 +1,8 @@
 package gg.grounds.presence
 
-import gg.grounds.grpc.player.CountPlayersByProxyReply
-import gg.grounds.grpc.player.CountPlayersByServerReply
+import gg.grounds.player.presence.PlayerSessionInfo as PresenceSessionInfo
+import gg.grounds.player.presence.ProxyPlayerCounts
+import gg.grounds.player.presence.ServerPlayerCounts
 import gg.grounds.proxy.api.NetworkPlayerCounts
 import gg.grounds.proxy.api.NetworkProxyCounts
 import gg.grounds.proxy.api.PlayerSessionInfo
@@ -34,43 +35,36 @@ class PlayerSessionQueryImpl(private val presenceService: PlayerPresenceService)
     override fun countPlayersByProxy(): NetworkProxyCounts? =
         presenceService.countPlayersByProxy()?.let(::toNetworkProxyCounts)
 
-    /**
-     * A session with no usable id or name tells the caller nothing — drop it rather than
-     * half-answer.
-     */
-    private fun toInfo(session: gg.grounds.grpc.player.PlayerSessionInfo): PlayerSessionInfo? {
-        val playerId = runCatching { UUID.fromString(session.playerId) }.getOrNull() ?: return null
-        val name = session.playerName.takeIf { it.isNotEmpty() } ?: return null
+    /** A session with no usable name tells the caller nothing — drop it rather than half-answer. */
+    private fun toInfo(session: PresenceSessionInfo): PlayerSessionInfo? {
+        val name = session.playerName ?: return null
         return PlayerSessionInfo(
-            playerId = playerId,
+            playerId = session.playerId,
             name = name,
-            proxyId = session.proxyId.takeIf { it.isNotEmpty() },
-            server = session.serverName.takeIf { it.isNotEmpty() },
+            proxyId = session.proxyId,
+            server = session.serverName,
             connectedAt = session.connectedAtMillis,
-            region = session.region.takeIf { it.isNotEmpty() },
+            region = session.region,
         )
     }
+
+    /**
+     * `proxies` has one row per occupied proxy; a proxy that declares no region is already null
+     * here rather than "", so callers have one shape for "unknown".
+     */
+    internal fun toNetworkProxyCounts(counts: ProxyPlayerCounts): NetworkProxyCounts =
+        NetworkProxyCounts(
+            proxies = counts.proxies.map { ProxyPlayers(it.proxyId, it.region, it.players) },
+            total = counts.total,
+        )
 
     /**
      * `servers` has one row per occupied backend server — a server nobody is on is absent, not a
      * zero entry.
      */
-    /**
-     * `proxies` has one row per occupied proxy. An empty region string means the proxy declares
-     * none — mapped to null rather than kept as "", so callers have one shape for "unknown".
-     */
-    internal fun toNetworkProxyCounts(reply: CountPlayersByProxyReply): NetworkProxyCounts =
-        NetworkProxyCounts(
-            proxies =
-                reply.proxiesList.map {
-                    ProxyPlayers(it.proxyId, it.region.takeIf(String::isNotEmpty), it.players)
-                },
-            total = reply.total,
-        )
-
-    internal fun toNetworkPlayerCounts(reply: CountPlayersByServerReply): NetworkPlayerCounts =
+    internal fun toNetworkPlayerCounts(counts: ServerPlayerCounts): NetworkPlayerCounts =
         NetworkPlayerCounts(
-            byServer = reply.serversList.associate { it.serverName to it.players },
-            total = reply.total,
+            byServer = counts.servers.associate { it.serverName to it.players },
+            total = counts.total,
         )
 }

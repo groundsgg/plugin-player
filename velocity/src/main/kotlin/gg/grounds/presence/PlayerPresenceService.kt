@@ -1,26 +1,27 @@
 package gg.grounds.presence
 
-import gg.grounds.grpc.player.CountPlayersByProxyReply
-import gg.grounds.grpc.player.CountPlayersByServerReply
-import gg.grounds.grpc.player.PlayerLogoutReply
-import gg.grounds.grpc.player.PlayerSessionInfo
-import gg.grounds.player.presence.GrpcPlayerPresenceClient
+import gg.grounds.player.presence.HttpPlayerPresenceClient
+import gg.grounds.player.presence.PlayerHeartbeatResult
 import gg.grounds.player.presence.PlayerLoginResult
+import gg.grounds.player.presence.PlayerLogoutResult
+import gg.grounds.player.presence.PlayerSessionInfo
+import gg.grounds.player.presence.ProxyPlayerCounts
+import gg.grounds.player.presence.ServerPlayerCounts
 import java.util.UUID
 
+/**
+ * The proxy's handle on service-player.
+ *
+ * Thin by design: the client already resolves every failure into the answer the caller can act on,
+ * so this exists to own the client's lifecycle and to keep the rest of the plugin from importing
+ * the transport.
+ */
 class PlayerPresenceService : AutoCloseable {
-    private lateinit var client: GrpcPlayerPresenceClient
+    private var client: HttpPlayerPresenceClient? = null
 
-    data class HeartbeatBatchResult(
-        val success: Boolean,
-        val message: String,
-        val updated: Int,
-        val missing: Int,
-    )
-
-    fun configure(target: String) {
+    fun configure(baseUrl: String) {
         close()
-        client = GrpcPlayerPresenceClient.create(target)
+        client = HttpPlayerPresenceClient(baseUrl)
     }
 
     fun tryLogin(
@@ -28,109 +29,67 @@ class PlayerPresenceService : AutoCloseable {
         playerName: String,
         proxyId: String,
         region: String,
-    ): PlayerLoginResult {
-        return try {
-            client.tryLogin(playerId, playerName, proxyId, region)
-        } catch (e: RuntimeException) {
-            PlayerLoginResult.Error(e.message ?: e::class.java.name)
+    ): PlayerLoginResult =
+        withClient(PlayerLoginResult.Unavailable("presence service is not configured")) {
+            it.tryLogin(playerId, playerName, proxyId, region)
         }
-    }
 
-    /**
-     * Cross-proxy lookups. Never throw: a failure means "unknown", and the caller falls back to
-     * local.
-     */
-    fun getSession(playerId: UUID): PlayerSessionInfo? {
-        return try {
-            client.getSession(playerId)
-        } catch (e: RuntimeException) {
-            null
+    fun logout(playerId: UUID, proxyId: String = ""): PlayerLogoutResult =
+        withClient(PlayerLogoutResult.Failed("presence service is not configured")) {
+            it.logout(playerId, proxyId)
         }
-    }
 
-    fun resolveName(playerName: String): PlayerSessionInfo? {
-        return try {
-            client.resolveName(playerName)
-        } catch (e: RuntimeException) {
-            null
-        }
-    }
-
-    fun suggestNames(prefix: String, limit: Int): List<String> {
-        return try {
-            client.suggestNames(prefix, limit)
-        } catch (e: RuntimeException) {
-            emptyList()
-        }
-    }
-
-    fun countPlayersByServer(): CountPlayersByServerReply? {
-        return try {
-            client.countPlayersByServer()
-        } catch (e: RuntimeException) {
-            null
-        }
-    }
-
-    fun countPlayersByProxy(): CountPlayersByProxyReply? {
-        return try {
-            client.countPlayersByProxy()
-        } catch (e: RuntimeException) {
-            null
-        }
-    }
-
-    fun updateServer(playerId: UUID, serverName: String): Boolean {
-        return try {
-            client.updateServer(playerId, serverName)
-        } catch (e: RuntimeException) {
-            false
-        }
-    }
-
-    fun logout(playerId: UUID, proxyId: String = ""): PlayerLogoutReply? {
-        return try {
-            client.logout(playerId, proxyId)
-        } catch (e: RuntimeException) {
-            null
-        }
-    }
-
-    fun heartbeatBatch(playerIds: Collection<UUID>): HeartbeatBatchResult {
-        return try {
-            val reply = client.heartbeatBatch(playerIds)
-            HeartbeatBatchResult(reply.success, reply.message, reply.updated, reply.missing)
-        } catch (e: RuntimeException) {
-            HeartbeatBatchResult(
+    fun heartbeatBatch(playerIds: Collection<UUID>): PlayerHeartbeatResult =
+        withClient(
+            PlayerHeartbeatResult(
                 success = false,
-                message = e.message ?: e::class.java.name,
+                message = "presence service is not configured",
                 updated = 0,
                 missing = playerIds.size,
             )
+        ) {
+            it.heartbeatBatch(playerIds)
         }
-    }
 
-    /** The player's stored language tag, or null when none is set. Never throws. */
-    fun getLocale(playerId: UUID): String? {
-        return try {
-            client.getLocale(playerId)
-        } catch (e: RuntimeException) {
-            null
-        }
-    }
+    /** Cross-proxy lookups. Null or empty means "unknown"; the caller falls back to local. */
+    fun getSession(playerId: UUID): PlayerSessionInfo? =
+        withClient(null) { it.getSession(playerId) }
 
-    /** Persists (or clears, with a blank tag) the player's language. Never throws. */
-    fun setLocale(playerId: UUID, locale: String): Boolean {
+    fun resolveName(playerName: String): PlayerSessionInfo? =
+        withClient(null) { it.resolveName(playerName) }
+
+    fun suggestNames(prefix: String, limit: Int): List<String> =
+        withClient(emptyList()) { it.suggestNames(prefix, limit) }
+
+    fun countPlayersByServer(): ServerPlayerCounts? = withClient(null) { it.countPlayersByServer() }
+
+    fun countPlayersByProxy(): ProxyPlayerCounts? = withClient(null) { it.countPlayersByProxy() }
+
+    fun updateServer(playerId: UUID, serverName: String): Boolean =
+        withClient(false) { it.updateServer(playerId, serverName) }
+
+    /** The player's stored language tag, or null when none is set. */
+    fun getLocale(playerId: UUID): String? = withClient(null) { it.getLocale(playerId) }
+
+    /** Persists, or with a blank tag clears, the player's language. */
+    fun setLocale(playerId: UUID, locale: String): Boolean =
+        withClient(false) { it.setLocale(playerId, locale) }
+
+    /**
+     * An unconfigured service answers like an unreachable one. A plugin that half-loaded should
+     * degrade the way the network already knows how to handle, not throw into an event listener.
+     */
+    private fun <T> withClient(fallback: T, call: (HttpPlayerPresenceClient) -> T): T {
+        val current = client ?: return fallback
         return try {
-            client.setLocale(playerId, locale)
-        } catch (e: RuntimeException) {
-            false
+            call(current)
+        } catch (_: RuntimeException) {
+            fallback
         }
     }
 
     override fun close() {
-        if (this::client.isInitialized) {
-            client.close()
-        }
+        client?.close()
+        client = null
     }
 }

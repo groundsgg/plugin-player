@@ -9,9 +9,8 @@ import com.velocitypowered.api.event.player.ServerConnectedEvent
 import com.velocitypowered.api.proxy.ProxyServer
 import com.velocitypowered.api.util.UuidUtils
 import gg.grounds.config.MessagesConfig
-import gg.grounds.grpc.player.LoginStatus
-import gg.grounds.grpc.player.PlayerLoginReply
 import gg.grounds.player.presence.PlayerLoginResult
+import gg.grounds.player.presence.PlayerLogoutResult
 import gg.grounds.presence.PlayerPresenceService
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -49,10 +48,26 @@ class PlayerConnectionListener(
             when (
                 val result = playerPresenceService.tryLogin(playerId, name, proxyId(), region())
             ) {
-                is PlayerLoginResult.Success -> {
-                    if (handleSuccess(event, name, playerId, result.reply)) {
-                        return@async
-                    }
+                PlayerLoginResult.Accepted -> {
+                    logger.info("Player session created (playerId={}, username={})", playerId, name)
+                    watchForAbandonedLogin(playerId, name)
+                }
+                PlayerLoginResult.AlreadyOnline -> {
+                    logger.warn(
+                        "Player session rejected (playerId={}, username={}, reason=already_online)",
+                        playerId,
+                        name,
+                    )
+                    deny(event, messages.alreadyOnline)
+                }
+                is PlayerLoginResult.Invalid -> {
+                    logger.warn(
+                        "Player session rejected (playerId={}, username={}, reason={})",
+                        playerId,
+                        name,
+                        result.message,
+                    )
+                    deny(event, messages.invalidRequest)
                 }
                 is PlayerLoginResult.Unavailable -> {
                     logger.warn(
@@ -89,60 +104,30 @@ class PlayerConnectionListener(
         val name = event.player.username
 
         return EventTask.async {
-            val result = playerPresenceService.logout(playerId, proxyId()) ?: return@async
-            if (result.removed) {
-                logger.info(
-                    "Player session logout completed (playerId={}, username={}, message={})",
-                    playerId,
-                    name,
-                    result.message,
-                )
-            } else {
-                logger.warn(
-                    "Player session logout failed (playerId={}, username={}, message={})",
-                    playerId,
-                    name,
-                    result.message,
-                )
-            }
-        }
-    }
-
-    private fun handleSuccess(
-        event: PreLoginEvent,
-        name: String,
-        playerId: UUID,
-        reply: PlayerLoginReply,
-    ): Boolean {
-        val kickMessage =
-            when (reply.status) {
-                LoginStatus.LOGIN_STATUS_ACCEPTED -> {
+            when (val result = playerPresenceService.logout(playerId, proxyId())) {
+                PlayerLogoutResult.Removed ->
                     logger.info(
-                        "Player session created (playerId={}, username={}, status={})",
+                        "Player session logout completed (playerId={}, username={})",
                         playerId,
                         name,
-                        reply.status,
                     )
-                    watchForAbandonedLogin(playerId, name)
-                    return true
-                }
-                LoginStatus.LOGIN_STATUS_ALREADY_ONLINE -> messages.alreadyOnline
-                LoginStatus.LOGIN_STATUS_INVALID_REQUEST -> messages.invalidRequest
-                LoginStatus.LOGIN_STATUS_UNSPECIFIED,
-                LoginStatus.LOGIN_STATUS_ERROR,
-                LoginStatus.UNRECOGNIZED -> messages.genericError
+                // The session was already gone, expired, or taken over by the proxy the player
+                // moved to. None of those are this proxy's problem to fix.
+                PlayerLogoutResult.NotFound ->
+                    logger.debug(
+                        "Player session logout found nothing to remove (playerId={}, username={})",
+                        playerId,
+                        name,
+                    )
+                is PlayerLogoutResult.Failed ->
+                    logger.warn(
+                        "Player session logout failed (playerId={}, username={}, message={})",
+                        playerId,
+                        name,
+                        result.message,
+                    )
             }
-
-        logger.warn(
-            "Player session rejected (playerId={}, username={}, status={}, message={})",
-            playerId,
-            name,
-            reply.status,
-            reply.message,
-        )
-
-        deny(event, kickMessage)
-        return false
+        }
     }
 
     private fun deny(event: PreLoginEvent, message: String) {
@@ -186,7 +171,7 @@ class PlayerConnectionListener(
             "Player session released after abandoned login (playerId={}, username={}, removed={})",
             playerId,
             name,
-            result?.removed,
+            result == PlayerLogoutResult.Removed,
         )
     }
 

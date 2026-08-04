@@ -8,11 +8,19 @@
 
 ## Configuration
 
-The plugin requires the gRPC target to be provided via environment variable:
+The plugin requires the address of service-player. A proxy that cannot reach presence
+cannot decide whether a player may join, so this is required rather than defaulted:
 
 ```bash
-export PLAYER_PRESENCE_GRPC_TARGET="dns:///service-player.api.svc.cluster.local:9000"
+export PLAYER_SERVICE_URL="http://service-player.api.svc.cluster.local:9000"
 ```
+
+The scheme may be omitted (`service-player.api.svc.cluster.local:9000`), matching how
+the deploy sets the other service URLs; `http://` is assumed.
+
+Calls carry the projected workload token from `GROUNDS_TOKEN_FILE`
+(default `/var/run/secrets/grounds/token`). With no token file present — local dev
+against a service running `grounds.auth.enabled=false` — requests go out unauthenticated.
 
 Optional heartbeat configuration:
 

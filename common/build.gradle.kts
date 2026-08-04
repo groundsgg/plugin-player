@@ -1,17 +1,9 @@
-plugins { id("gg.grounds.grpc-conventions") }
-
-repositories {
-    maven {
-        url = uri("https://maven.pkg.github.com/groundsgg/*")
-        credentials {
-            username = providers.gradleProperty("github.user").get()
-            password = providers.gradleProperty("github.token").get()
-        }
-    }
-}
+plugins { id("gg.grounds.kotlin-conventions") }
 
 dependencies {
-    protobuf("gg.grounds:library-grpc-contracts-player:0.7.0")
+    // service-player is reached over HTTP now: the JDK's own client, and Jackson for the bodies —
+    // the same pair ForgeLinkClient already uses, so nothing new lands in the shaded jar.
+    implementation("tools.jackson.core:jackson-databind:3.0.4")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.4")

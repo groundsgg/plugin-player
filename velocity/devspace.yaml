@@ -30,7 +30,7 @@ dev:
       disableReplace: true
       command: |
         # ENV needs to be exported in start command because we are not letting devspace replace the pod
-        export PLAYER_PRESENCE_GRPC_TARGET=dns:///service-player.api.svc.cluster.local:9000
+        export PLAYER_SERVICE_URL=http://service-player.api.svc.cluster.local:9000
         echo "Use ./start.sh to start the server"
         /bin/sh
     # Forward the following ports to be able to access your application via localhost
