@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/groundsgg/plugin-player/compare/v1.0.0...v1.1.0) (2026-08-23)
+
+
+### Features
+
+* **edition:** tell backends which players came from Bedrock ([#35](https://github.com/groundsgg/plugin-player/issues/35)) ([1474f6c](https://github.com/groundsgg/plugin-player/commit/1474f6c121cd66ba87013a88edb24c4c9061838a))
+
 ## [1.0.0](https://github.com/groundsgg/plugin-player/compare/v0.6.0...v1.0.0) (2026-08-04)
 
 
