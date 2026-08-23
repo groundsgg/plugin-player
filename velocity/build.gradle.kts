@@ -21,6 +21,9 @@ dependencies {
     // compileOnly above is not visible to tests; PlayerSessionQueryImplTest needs the interface's
     // types.
     testImplementation("gg.grounds:plugin-proxy-api:0.5.0")
+    // Same reason: the conventions plugin puts velocity-api on compileOnly, and
+    // EditionStampListenerTest builds a GameProfile.Property.
+    testImplementation("com.velocitypowered:velocity-api:3.5.0-SNAPSHOT")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")

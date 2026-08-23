@@ -10,6 +10,8 @@ import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
 import gg.grounds.config.MessagesConfig
 import gg.grounds.config.MessagesConfigLoader
+import gg.grounds.edition.FloodgateLookup
+import gg.grounds.edition.listener.EditionStampListener
 import gg.grounds.link.ForgeLinkClient
 import gg.grounds.link.LinkCommand
 import gg.grounds.listener.PlayerConnectionListener
@@ -92,9 +94,32 @@ constructor(
         )
 
         registerLinkCommands(messages)
+        registerEditionStamp()
 
         heartbeatScheduler.start()
         logger.info("Configured player presence client (serviceUrl={})", serviceUrl)
+    }
+
+    /**
+     * Tells backends which of their players came from Bedrock, by stamping a property onto the
+     * signed part of the forwarding payload.
+     *
+     * Only the Bedrock proxy carries Floodgate, so on the Java proxies there is nothing to ask and
+     * the listener is not registered at all — rather than registered and answering "Java" for
+     * everyone, which is the same outcome for more moving parts.
+     */
+    private fun registerEditionStamp() {
+        val floodgate = FloodgateLookup.create(logger)
+        if (floodgate == null) {
+            logger.debug("Floodgate not installed; backends see no edition marker from this proxy")
+            return
+        }
+        proxy.eventManager.register(this, EditionStampListener(floodgate, logger))
+        logger.info(
+            "Marking Bedrock players for backends ({}={})",
+            EditionStampListener.PROPERTY,
+            EditionStampListener.BEDROCK,
+        )
     }
 
     /**
