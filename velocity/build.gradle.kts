@@ -16,7 +16,7 @@ dependencies {
     // registry this plugin writes into would be a different class from the one chat/social read.
     compileOnly("gg.grounds:plugin-proxy-api:0.5.0")
     implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.0.4")
-    implementation("tools.jackson.module:jackson-module-kotlin:3.0.4")
+    implementation("tools.jackson.module:jackson-module-kotlin:3.2.2")
 
     // compileOnly above is not visible to tests; PlayerSessionQueryImplTest needs the interface's
     // types.
