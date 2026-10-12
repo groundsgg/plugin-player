@@ -206,6 +206,28 @@ class HttpPlayerPresenceClient(
         return response.statusCode() == 204
     }
 
+    /**
+     * The region code the player prefers to play in, or null when they have chosen none — or when
+     * we could not ask, which the join path treats the same way: no redirect.
+     */
+    fun getRegion(playerId: UUID): String? =
+        readJson("/v1/players/$playerId/region")
+            ?.get("region")
+            ?.asString()
+            ?.takeIf(String::isNotEmpty)
+
+    /** Stores, or with null or a blank code clears, the player's preferred region. */
+    fun setRegion(playerId: UUID, region: String?): Boolean {
+        val body = mapper.writeValueAsString(mapOf("region" to region))
+        val response =
+            send(
+                request("/v1/players/$playerId/region")
+                    .header("Content-Type", APPLICATION_JSON)
+                    .PUT(HttpRequest.BodyPublishers.ofString(body))
+            ) ?: return false
+        return response.statusCode() == 204
+    }
+
     override fun close() {
         httpClient.close()
     }
