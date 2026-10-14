@@ -68,7 +68,7 @@ object LangCommand {
                                 return@executes 1
                             }
 
-                            cache.set(player.uniqueId, locale)
+                            cache.choose(player, locale)
                             player.sendMessage(
                                 Component.text("Language set to $code.", NamedTextColor.GREEN)
                             )

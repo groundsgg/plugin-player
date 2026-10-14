@@ -20,10 +20,10 @@ class LocaleConnectionListener(
 ) {
     @Subscribe
     fun onPostLogin(event: PostLoginEvent): EventTask {
-        val playerId = event.player.uniqueId
+        val player = event.player
         return EventTask.async {
-            val tag = presence.getLocale(playerId) ?: return@async
-            SupportedLanguages.parse(tag)?.let { cache.set(playerId, it) }
+            val tag = presence.getLocale(player.uniqueId) ?: return@async
+            SupportedLanguages.parse(tag)?.let { cache.choose(player, it) }
         }
     }
 
