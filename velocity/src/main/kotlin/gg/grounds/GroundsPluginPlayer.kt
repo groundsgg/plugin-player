@@ -8,10 +8,10 @@ import com.velocitypowered.api.plugin.Dependency
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
-import gg.grounds.config.MessagesConfig
 import gg.grounds.config.MessagesConfigLoader
 import gg.grounds.edition.FloodgateLookup
 import gg.grounds.edition.listener.EditionStampListener
+import gg.grounds.i18n.Translations
 import gg.grounds.link.ForgeLinkClient
 import gg.grounds.link.LinkCommand
 import gg.grounds.listener.PlayerConnectionListener
@@ -22,6 +22,7 @@ import gg.grounds.locale.listener.LocaleConnectionListener
 import gg.grounds.presence.PlayerHeartbeatScheduler
 import gg.grounds.presence.PlayerPresenceService
 import gg.grounds.presence.PlayerSessionQueryImpl
+import gg.grounds.presentation.VelocitySystemMessages
 import gg.grounds.proxy.api.PlayerLocaleQuery
 import gg.grounds.proxy.api.PlayerSessionQuery
 import gg.grounds.proxy.api.ProxyServiceRegistry
@@ -36,7 +37,7 @@ import org.slf4j.Logger
     authors = ["Grounds Development Team and contributors"],
     url = "https://github.com/groundsgg/plugin-player",
     // plugin-proxy owns the ProxyServiceRegistry this plugin publishes its session lookup into.
-    dependencies = [Dependency(id = "plugin-proxy")],
+    dependencies = [Dependency(id = "plugin-proxy"), Dependency(id = "floodgate", optional = true)],
 )
 class GroundsPluginPlayer
 @Inject
@@ -57,6 +58,12 @@ constructor(
     @Subscribe
     fun onInitialize(event: ProxyInitializeEvent) {
         val messages = MessagesConfigLoader(logger, dataDirectory).loadOrCreate()
+        val translations =
+            Translations.forBundleWithSystemRenderer(
+                "gg.grounds.player.messages",
+                javaClass.classLoader,
+                systemRenderer = VelocitySystemMessages.renderer,
+            )
         val serviceUrl = resolveServiceUrl()
         playerPresenceService.configure(serviceUrl)
 
@@ -91,35 +98,23 @@ constructor(
             PlayerLocaleQueryImpl(playerLocaleCache),
         )
         proxy.commandManager.register(
-            LangCommand.create(playerLocaleCache, playerPresenceService, logger)
+            LangCommand.create(playerLocaleCache, playerPresenceService, logger, translations)
         )
 
-        registerLinkCommands(messages)
+        registerLinkCommands(translations)
         registerEditionStamp()
 
         heartbeatScheduler.start()
         logger.info("Configured player presence client (serviceUrl={})", serviceUrl)
     }
 
-    /**
-     * Tells backends which of their players came from Bedrock, by stamping a property onto the
-     * signed part of the forwarding payload.
-     *
-     * Only the Bedrock proxy carries Floodgate, so on the Java proxies there is nothing to ask and
-     * the listener is not registered at all — rather than registered and answering "Java" for
-     * everyone, which is the same outcome for more moving parts.
-     */
+    /** Stamps an authenticated Java or Bedrock edition into the signed forwarding profile. */
     private fun registerEditionStamp() {
         val floodgate = FloodgateLookup.create(logger)
-        if (floodgate == null) {
-            logger.debug("Floodgate not installed; backends see no edition marker from this proxy")
-            return
-        }
         proxy.eventManager.register(this, EditionStampListener(floodgate, logger))
         logger.info(
-            "Marking Bedrock players for backends ({}={})",
+            "Marking authenticated player edition for backends ({})",
             EditionStampListener.PROPERTY,
-            EditionStampListener.BEDROCK,
         )
     }
 
@@ -128,7 +123,7 @@ constructor(
      * pushed workloads. Outside that context (a bare local proxy, say) the env vars are absent —
      * skip the commands rather than register ones that can only ever fail.
      */
-    private fun registerLinkCommands(messages: MessagesConfig) {
+    private fun registerLinkCommands(messages: Translations) {
         val forgeUrl = System.getenv("GROUNDS_FORGE_URL")?.trim()?.trimEnd('/')
         if (forgeUrl.isNullOrEmpty()) {
             logger.info("GROUNDS_FORGE_URL is not set; /link is unavailable")

@@ -1,4 +1,5 @@
-serviceUnavailable: "Login service unavailable"
-alreadyOnline: "You are already online."
-invalidRequest: "Invalid login request."
-genericError: "Unable to create player session."
+# Optional literal overrides. Leave null to use the i18n source-language fallback before login.
+serviceUnavailable: null
+alreadyOnline: null
+invalidRequest: null
+genericError: null

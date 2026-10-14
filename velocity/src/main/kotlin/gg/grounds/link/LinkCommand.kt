@@ -4,11 +4,9 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.velocitypowered.api.command.BrigadierCommand
 import com.velocitypowered.api.command.CommandSource
 import com.velocitypowered.api.proxy.Player
-import gg.grounds.config.MessagesConfig
-import net.kyori.adventure.text.Component
+import gg.grounds.PlayerMessage
+import gg.grounds.i18n.Translations
 import net.kyori.adventure.text.event.ClickEvent
-import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextDecoration
 import org.slf4j.Logger
 
 /**
@@ -21,26 +19,26 @@ import org.slf4j.Logger
  */
 object LinkCommand {
 
-    fun create(
-        client: ForgeLinkClient,
-        messages: MessagesConfig,
-        logger: Logger,
-    ): BrigadierCommand {
+    fun create(client: ForgeLinkClient, messages: Translations, logger: Logger): BrigadierCommand {
         val node =
             LiteralArgumentBuilder.literal<CommandSource>("link").executes { ctx ->
                 val player = ctx.source as? Player
                 if (player == null) {
-                    ctx.source.sendMessage(
-                        Component.text(messages.linkPlayersOnly, NamedTextColor.RED)
-                    )
+                    messages.send(ctx.source, PlayerMessage.LINK_PLAYERS_ONLY)
                     return@executes 1
                 }
 
-                player.sendMessage(Component.text(messages.linkWorking, NamedTextColor.GRAY))
+                messages.send(player, PlayerMessage.LINK_WORKING)
 
                 client
                     .startLink(player.uniqueId)
-                    .thenAccept { url -> player.sendMessage(linkMessage(url, messages)) }
+                    .thenAccept { url ->
+                        val link =
+                            messages
+                                .render(PlayerMessage.LINK_CLICK, player)
+                                .clickEvent(ClickEvent.openUrl(url))
+                        messages.send(player, PlayerMessage.LINK_PROMPT, "link" to link)
+                    }
                     .exceptionally { err ->
                         // The player gets a flat "couldn't do it"; the reason is ours to debug.
                         logger.warn(
@@ -48,7 +46,7 @@ object LinkCommand {
                             player.uniqueId,
                             err,
                         )
-                        player.sendMessage(Component.text(messages.linkFailed, NamedTextColor.RED))
+                        messages.send(player, PlayerMessage.LINK_FAILED)
                         null
                     }
                 1
@@ -59,29 +57,23 @@ object LinkCommand {
 
     fun createUnlink(
         client: ForgeLinkClient,
-        messages: MessagesConfig,
+        messages: Translations,
         logger: Logger,
     ): BrigadierCommand {
         val node =
             LiteralArgumentBuilder.literal<CommandSource>("unlink").executes { ctx ->
                 val player = ctx.source as? Player
                 if (player == null) {
-                    ctx.source.sendMessage(
-                        Component.text(messages.linkPlayersOnly, NamedTextColor.RED)
-                    )
+                    messages.send(ctx.source, PlayerMessage.LINK_PLAYERS_ONLY)
                     return@executes 1
                 }
 
                 client
                     .unlink(player.uniqueId)
-                    .thenRun {
-                        player.sendMessage(
-                            Component.text(messages.unlinkDone, NamedTextColor.GREEN)
-                        )
-                    }
+                    .thenRun { messages.send(player, PlayerMessage.UNLINK_DONE) }
                     .exceptionally { err ->
                         logger.warn("Failed to unlink (player={})", player.uniqueId, err)
-                        player.sendMessage(Component.text(messages.linkFailed, NamedTextColor.RED))
+                        messages.send(player, PlayerMessage.LINK_FAILED)
                         null
                     }
                 1
@@ -89,17 +81,4 @@ object LinkCommand {
 
         return BrigadierCommand(node.build())
     }
-
-    /**
-     * The URL is long and single-use, so it is attached as a click target rather than pasted into
-     * chat — a wrapped URL that the player has to retype by hand is not a link flow.
-     */
-    private fun linkMessage(url: String, messages: MessagesConfig): Component =
-        Component.text(messages.linkPrompt, NamedTextColor.YELLOW)
-            .append(Component.space())
-            .append(
-                Component.text(messages.linkClickHere, NamedTextColor.AQUA)
-                    .decorate(TextDecoration.UNDERLINED)
-                    .clickEvent(ClickEvent.openUrl(url))
-            )
 }

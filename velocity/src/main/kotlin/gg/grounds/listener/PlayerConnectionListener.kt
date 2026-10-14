@@ -8,6 +8,7 @@ import com.velocitypowered.api.event.connection.PreLoginEvent
 import com.velocitypowered.api.event.player.ServerConnectedEvent
 import com.velocitypowered.api.proxy.ProxyServer
 import com.velocitypowered.api.util.UuidUtils
+import gg.grounds.PlayerMessage
 import gg.grounds.config.MessagesConfig
 import gg.grounds.player.presence.PlayerLoginResult
 import gg.grounds.player.presence.PlayerLogoutResult
@@ -58,7 +59,13 @@ class PlayerConnectionListener(
                         playerId,
                         name,
                     )
-                    deny(event, messages.alreadyOnline)
+                    deny(
+                        event,
+                        LoginMessageRenderer.render(
+                            PlayerMessage.LOGIN_ALREADY_ONLINE,
+                            messages.alreadyOnline,
+                        ),
+                    )
                 }
                 is PlayerLoginResult.Invalid -> {
                     logger.warn(
@@ -67,7 +74,13 @@ class PlayerConnectionListener(
                         name,
                         result.message,
                     )
-                    deny(event, messages.invalidRequest)
+                    deny(
+                        event,
+                        LoginMessageRenderer.render(
+                            PlayerMessage.LOGIN_INVALID_REQUEST,
+                            messages.invalidRequest,
+                        ),
+                    )
                 }
                 is PlayerLoginResult.Unavailable -> {
                     logger.warn(
@@ -76,7 +89,13 @@ class PlayerConnectionListener(
                         name,
                         result.message,
                     )
-                    deny(event, messages.serviceUnavailable)
+                    deny(
+                        event,
+                        LoginMessageRenderer.render(
+                            PlayerMessage.LOGIN_SERVICE_UNAVAILABLE,
+                            messages.serviceUnavailable,
+                        ),
+                    )
                 }
                 is PlayerLoginResult.Error -> {
                     logger.warn(
@@ -85,7 +104,13 @@ class PlayerConnectionListener(
                         name,
                         result.message,
                     )
-                    deny(event, messages.genericError)
+                    deny(
+                        event,
+                        LoginMessageRenderer.render(
+                            PlayerMessage.LOGIN_ERROR,
+                            messages.genericError,
+                        ),
+                    )
                 }
             }
         }
@@ -130,8 +155,8 @@ class PlayerConnectionListener(
         }
     }
 
-    private fun deny(event: PreLoginEvent, message: String) {
-        event.result = PreLoginEvent.PreLoginComponentResult.denied(Component.text(message))
+    private fun deny(event: PreLoginEvent, message: Component) {
+        event.result = PreLoginEvent.PreLoginComponentResult.denied(message)
     }
 
     /**

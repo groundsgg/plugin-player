@@ -30,7 +30,8 @@ import org.slf4j.Logger
  * **Ordering.** Floodgate's own skin applier also rewrites the property list, but it copies the
  * list and removes only `textures`, so it cannot drop this one whichever way round the two run.
  *
- * Registered only when Floodgate is installed, which in practice means only on the Bedrock proxy.
+ * Registered on every proxy. Missing Floodgate identifies a Java-only proxy; a broken Floodgate API
+ * remains unknown and cannot create an affirmative Java marker.
  */
 class EditionStampListener(private val floodgate: FloodgateLookup, private val logger: Logger) {
 
@@ -40,23 +41,40 @@ class EditionStampListener(private val floodgate: FloodgateLookup, private val l
     }
 
     private fun stamp(player: Player) {
-        if (!floodgate.isBedrock(player.uniqueId)) return
-
-        val updated = withEditionProperty(player.gameProfileProperties) ?: return
+        val edition =
+            when (floodgate.classify(player.uniqueId)) {
+                true -> BEDROCK
+                false -> JAVA
+                null -> null
+            }
+        val updated = withEditionProperty(player.gameProfileProperties, edition)
+        if (updated == player.gameProfileProperties) return
         player.gameProfileProperties = updated
-        logger.debug("Marked {} as a Bedrock player ({}={})", player.username, PROPERTY, BEDROCK)
+        if (edition == null) {
+            logger.debug("Removed unverified edition marker from {}", player.username)
+        } else {
+            logger.debug(
+                "Marked {} with authenticated edition ({}={})",
+                player.username,
+                PROPERTY,
+                edition,
+            )
+        }
     }
 
     companion object {
         /**
          * Namespaced because it rides in a list Mojang also writes to — `textures` is theirs.
          *
-         * Backends match on the name and treat any other value, or its absence, as Java.
+         * Backends require one of the authenticated values written below.
          */
         const val PROPERTY = "grounds:edition"
 
-        /** The only value written today. A Java player carries no property rather than a value. */
+        /** Authenticated Floodgate classification. */
         const val BEDROCK = "bedrock"
+
+        /** Explicit Java classification written by proxies where Floodgate is absent or says no. */
+        const val JAVA = "java"
 
         /**
          * The property list to write, or null when [existing] already carries the marker.
@@ -71,5 +89,21 @@ class EditionStampListener(private val floodgate: FloodgateLookup, private val l
         fun withEditionProperty(existing: List<GameProfile.Property>): List<GameProfile.Property>? =
             if (existing.any { it.name == PROPERTY }) null
             else existing + GameProfile.Property(PROPERTY, BEDROCK, "")
+
+        /**
+         * Replaces all untrusted edition markers with one authenticated [value]. A null value is an
+         * unknown classification and therefore removes markers without adding one.
+         */
+        fun withEditionProperty(
+            existing: List<GameProfile.Property>,
+            value: String?,
+        ): List<GameProfile.Property> {
+            require(value == null || value == BEDROCK || value == JAVA) {
+                "Unsupported edition marker: $value"
+            }
+            val withoutEdition = existing.filterNot { it.name == PROPERTY }
+            return if (value == null) withoutEdition
+            else withoutEdition + GameProfile.Property(PROPERTY, value, "")
+        }
     }
 }
