@@ -33,6 +33,16 @@ class PlayerLocaleCache {
         player.effectiveLocale = locale
     }
 
+    /**
+     * Undoes [choose]: [player] follows the language their client announces again. Dropping the
+     * cache entry alone is not enough — the effective locale would keep the old choice until they
+     * log in again; null makes Velocity fall back to the client's own.
+     */
+    fun followClient(player: Player) {
+        remove(player.uniqueId)
+        player.effectiveLocale = null
+    }
+
     fun remove(playerId: UUID) {
         cache.remove(playerId)
     }
