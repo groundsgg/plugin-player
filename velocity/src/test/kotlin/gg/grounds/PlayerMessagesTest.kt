@@ -2,6 +2,7 @@ package gg.grounds
 
 import gg.grounds.i18n.BundleCheck
 import gg.grounds.i18n.SystemCategory
+import gg.grounds.i18n.SystemLevel
 import gg.grounds.i18n.Translations
 import java.util.Locale
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
@@ -27,7 +28,8 @@ class PlayerMessagesTest {
             "Unbekannte Sprache '<red>xx</red>'. Verfügbar: en, de, es, fr",
             plain.serialize(rendered),
         )
-        assertEquals(SystemCategory.ERROR, PlayerMessage.LANG_UNKNOWN.category)
+        assertEquals(SystemCategory.GENERAL, PlayerMessage.LANG_UNKNOWN.category)
+        assertEquals(SystemLevel.ERROR, PlayerMessage.LANG_UNKNOWN.level)
     }
 
     @Test
