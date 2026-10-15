@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/groundsgg/plugin-player/compare/v1.1.0...v1.2.0) (2026-10-14)
+
+
+### Features
+
+* **locale:** refresh a player's language when a backend changed it ([#47](https://github.com/groundsgg/plugin-player/issues/47)) ([d11363d](https://github.com/groundsgg/plugin-player/commit/d11363d3c9a96de65133e3505a77b733a9168bf3))
+
+## [1.1.0](https://github.com/groundsgg/plugin-player/compare/v1.0.0...v1.1.0) (2026-10-14)
+
+
+### Features
+
+* **edition:** tell backends which players came from Bedrock ([#35](https://github.com/groundsgg/plugin-player/issues/35)) ([1474f6c](https://github.com/groundsgg/plugin-player/commit/1474f6c121cd66ba87013a88edb24c4c9061838a))
+* **locale:** make the stored language the player's effective locale ([#46](https://github.com/groundsgg/plugin-player/issues/46)) ([de0f888](https://github.com/groundsgg/plugin-player/commit/de0f8884cf91acecd91279006de94121a02a6af9))
+
 ## [1.0.0](https://github.com/groundsgg/plugin-player/compare/v0.6.0...v1.0.0) (2026-08-04)
 
 

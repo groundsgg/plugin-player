@@ -88,6 +88,7 @@ constructor(
             this,
             LocaleConnectionListener(playerLocaleCache, playerPresenceService),
         )
+        proxy.channelRegistrar.register(LocaleConnectionListener.CHANNEL)
         ProxyServiceRegistry.register(
             PlayerLocaleQuery::class.java,
             PlayerLocaleQueryImpl(playerLocaleCache),
