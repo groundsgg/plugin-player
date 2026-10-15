@@ -75,6 +75,9 @@ class PlayerPresenceService : AutoCloseable {
     fun setLocale(playerId: UUID, locale: String): Boolean =
         withClient(false) { it.setLocale(playerId, locale) }
 
+    /** The player's preferred region code, or null when none is set or it could not be read. */
+    fun getRegion(playerId: UUID): String? = withClient(null) { it.getRegion(playerId) }
+
     /**
      * An unconfigured service answers like an unreachable one. A plugin that half-loaded should
      * degrade the way the network already knows how to handle, not throw into an event listener.
