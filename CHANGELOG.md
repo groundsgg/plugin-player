@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/groundsgg/plugin-player/compare/v1.2.0...v1.3.0) (2026-10-15)
+
+
+### Features
+
+* send joining players to their preferred region ([#43](https://github.com/groundsgg/plugin-player/issues/43)) ([08f033b](https://github.com/groundsgg/plugin-player/commit/08f033be163def6ba16e2de95d2af2e6937ec026))
+
 ## [1.2.0](https://github.com/groundsgg/plugin-player/compare/v1.1.0...v1.2.0) (2026-10-14)
 
 
