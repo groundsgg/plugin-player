@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/groundsgg/plugin-player/compare/v1.4.0...v1.5.0) (2026-10-17)
+
+
+### Features
+
+* **player:** enforce exact Minecraft profile sessions ([#54](https://github.com/groundsgg/plugin-player/issues/54)) ([4368df8](https://github.com/groundsgg/plugin-player/commit/4368df8385c1ab07f3b8e21b53f13fa619e76757))
+
+
+### Bug Fixes
+
+* **chat:** align context and message-level colors ([#52](https://github.com/groundsgg/plugin-player/issues/52)) ([5dbda8f](https://github.com/groundsgg/plugin-player/commit/5dbda8f4ce089a0f706a41173d215db728dd3285))
+
 ## [1.4.0](https://github.com/groundsgg/plugin-player/compare/v1.3.0...v1.4.0) (2026-10-17)
 
 
