@@ -1,23 +1,29 @@
 package gg.grounds.listener
 
 import com.velocitypowered.api.event.EventTask
+import com.velocitypowered.api.event.ResultedEvent
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.DisconnectEvent
+import com.velocitypowered.api.event.connection.LoginEvent
 import com.velocitypowered.api.event.connection.PostLoginEvent
-import com.velocitypowered.api.event.connection.PreLoginEvent
+import com.velocitypowered.api.event.player.CookieReceiveEvent
 import com.velocitypowered.api.event.player.ServerConnectedEvent
+import com.velocitypowered.api.proxy.Player
 import com.velocitypowered.api.proxy.ProxyServer
-import com.velocitypowered.api.util.UuidUtils
 import gg.grounds.PlayerMessage
 import gg.grounds.config.MessagesConfig
-import gg.grounds.player.presence.PlayerLoginResult
+import gg.grounds.player.presence.ExactPlayerLoginResult
 import gg.grounds.player.presence.PlayerLogoutResult
 import gg.grounds.presence.PlayerPresenceService
-import java.util.UUID
+import java.util.Collections
+import java.util.IdentityHashMap
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
 import org.slf4j.Logger
+import tools.jackson.databind.json.JsonMapper
 
 class PlayerConnectionListener(
     private val logger: Logger,
@@ -27,37 +33,42 @@ class PlayerConnectionListener(
     private val plugin: Any,
     private val abandonedLoginGraceSeconds: Long = DEFAULT_ABANDONED_LOGIN_GRACE_SECONDS,
 ) {
-    /**
-     * Players whose session this proxy created at pre-login and who have not become a [Player] yet.
-     *
-     * The pair that keeps presence honest is pre-login → disconnect, and it has a hole: Velocity
-     * only fires DisconnectEvent for connections that finished logging in. A client that dies in
-     * between — an expired Mojang session, a crash, a pulled cable — leaves the row behind, and
-     * every retry is then refused with "you are already online" until the 90s TTL reaps it. So the
-     * proxy that created the row watches it: no player after the grace period, no session.
-     */
-    private val pendingLogins: MutableSet<UUID> = ConcurrentHashMap.newKeySet()
+    /** Identity semantics keep callbacks from an older connection away from its reconnect. */
+    private val pendingLogins: MutableSet<Player> =
+        Collections.newSetFromMap(Collections.synchronizedMap(IdentityHashMap()))
+    private val pendingTransfers: MutableSet<Player> =
+        Collections.newSetFromMap(Collections.synchronizedMap(IdentityHashMap()))
+    private val handoffCookies = ConcurrentHashMap<Player, CompletableFuture<ByteArray>>()
+    private val mapper = JsonMapper.builder().build()
 
     @Subscribe
-    fun onPreLogin(event: PreLoginEvent): EventTask {
-        val name = event.username
-        val playerId = event.uniqueId ?: UuidUtils.generateOfflinePlayerUuid(name)
-
-        return EventTask.async {
-            // The name is what makes the session findable from another proxy — without it a player
-            // exists in presence but nobody can /msg them. PROXY_ID says which proxy holds them.
-            when (
-                val result = playerPresenceService.tryLogin(playerId, name, proxyId(), region())
+    fun onLogin(event: LoginEvent): EventTask =
+        EventTask.async {
+            val player = event.player
+            if (
+                player.handshakeIntent == com.velocitypowered.api.network.HandshakeIntent.TRANSFER
             ) {
-                PlayerLoginResult.Accepted -> {
-                    logger.info("Player session created (playerId={}, username={})", playerId, name)
-                    watchForAbandonedLogin(playerId, name)
+                // A transfer is admitted only after the destination consumes the cookie handoff.
+                pendingTransfers.add(player)
+                return@async
+            }
+            val result = playerPresenceService.claim(player, proxyId(), region())
+            when (result) {
+                is ExactPlayerLoginResult.Accepted -> {
+                    pendingLogins.add(player)
+                    logger.info(
+                        "Player session claimed (playerId={}, sessionId={}, username={})",
+                        player.uniqueId,
+                        result.session.sessionId,
+                        player.username,
+                    )
+                    watchForAbandonedLogin(player)
                 }
-                PlayerLoginResult.AlreadyOnline -> {
+                ExactPlayerLoginResult.AlreadyOnline -> {
                     logger.warn(
                         "Player session rejected (playerId={}, username={}, reason=already_online)",
-                        playerId,
-                        name,
+                        player.uniqueId,
+                        player.username,
                     )
                     deny(
                         event,
@@ -67,26 +78,11 @@ class PlayerConnectionListener(
                         ),
                     )
                 }
-                is PlayerLoginResult.Invalid -> {
-                    logger.warn(
-                        "Player session rejected (playerId={}, username={}, reason={})",
-                        playerId,
-                        name,
-                        result.message,
-                    )
-                    deny(
-                        event,
-                        LoginMessageRenderer.render(
-                            PlayerMessage.LOGIN_INVALID_REQUEST,
-                            messages.invalidRequest,
-                        ),
-                    )
-                }
-                is PlayerLoginResult.Unavailable -> {
+                is ExactPlayerLoginResult.Unavailable -> {
                     logger.warn(
                         "Player presence login unavailable (playerId={}, username={}, reason={})",
-                        playerId,
-                        name,
+                        player.uniqueId,
+                        player.username,
                         result.message,
                     )
                     deny(
@@ -97,11 +93,11 @@ class PlayerConnectionListener(
                         ),
                     )
                 }
-                is PlayerLoginResult.Error -> {
+                is ExactPlayerLoginResult.Error -> {
                     logger.warn(
                         "Player presence login failed (playerId={}, username={}, reason={})",
-                        playerId,
-                        name,
+                        player.uniqueId,
+                        player.username,
                         result.message,
                     )
                     deny(
@@ -114,113 +110,163 @@ class PlayerConnectionListener(
                 }
             }
         }
-    }
 
-    /** The connection became a real player — the disconnect path owns the session from here. */
     @Subscribe
     fun onPostLogin(event: PostLoginEvent) {
-        pendingLogins.remove(event.player.uniqueId)
+        pendingLogins.remove(event.player)
     }
 
     @Subscribe
-    fun onDisconnect(event: DisconnectEvent): EventTask {
-        pendingLogins.remove(event.player.uniqueId)
-        val playerId = event.player.uniqueId
-        val name = event.player.username
-
+    fun onPostLoginTransfer(event: PostLoginEvent): EventTask? {
+        val player = event.player
+        if (!pendingTransfers.remove(player)) return null
+        val cookie = CompletableFuture<ByteArray>()
+        handoffCookies[player] = cookie
         return EventTask.async {
-            when (val result = playerPresenceService.logout(playerId, proxyId())) {
+            try {
+                player.requestCookie(HANDOFF_COOKIE)
+                val bytes = cookie.get(COOKIE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                if (bytes.size > MAX_HANDOFF_COOKIE_BYTES) {
+                    player.disconnect(
+                        Component.text("This transfer could not be verified. Please reconnect.")
+                    )
+                    return@async
+                }
+                val json = mapper.readTree(bytes)
+                val playerId = json.get("playerId")?.asString()
+                val token = json.get("token")?.asString()?.takeIf(String::isNotBlank)
+                if (playerId != player.uniqueId.toString() || token == null) {
+                    player.disconnect(
+                        Component.text("This transfer could not be verified. Please reconnect.")
+                    )
+                    return@async
+                }
+                val sessionId = java.util.UUID.randomUUID()
+                when (val result = playerPresenceService.consumeHandoff(player, token, sessionId)) {
+                    is ExactPlayerLoginResult.Accepted ->
+                        logger.info(
+                            "Player session handoff accepted (playerId={}, sessionId={})",
+                            player.uniqueId,
+                            sessionId,
+                        )
+                    else -> {
+                        logger.warn(
+                            "Player session handoff rejected (playerId={}, reason={})",
+                            player.uniqueId,
+                            result,
+                        )
+                        player.disconnect(
+                            Component.text("This transfer could not be verified. Please reconnect.")
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Player session handoff unavailable (playerId={})", player.uniqueId, e)
+                player.disconnect(
+                    Component.text("This transfer could not be verified. Please reconnect.")
+                )
+            } finally {
+                handoffCookies.remove(player)
+            }
+        }
+    }
+
+    @Subscribe
+    fun onCookieReceive(event: CookieReceiveEvent) {
+        if (event.originalKey != HANDOFF_COOKIE) return
+        handoffCookies[event.player]?.complete(event.originalData)
+    }
+
+    @Subscribe
+    fun onDisconnect(event: DisconnectEvent): EventTask? {
+        val player = event.player
+        pendingLogins.remove(player)
+        pendingTransfers.remove(player)
+        handoffCookies
+            .remove(player)
+            ?.completeExceptionally(IllegalStateException("player disconnected"))
+        val lease = playerPresenceService.remove(player) ?: return null
+        return EventTask.async {
+            when (val result = playerPresenceService.logoutExact(lease)) {
                 PlayerLogoutResult.Removed ->
                     logger.info(
-                        "Player session logout completed (playerId={}, username={})",
-                        playerId,
-                        name,
+                        "Player session logout completed (playerId={}, sessionId={})",
+                        lease.playerId,
+                        lease.sessionId,
                     )
-                // The session was already gone, expired, or taken over by the proxy the player
-                // moved to. None of those are this proxy's problem to fix.
                 PlayerLogoutResult.NotFound ->
                     logger.debug(
-                        "Player session logout found nothing to remove (playerId={}, username={})",
-                        playerId,
-                        name,
+                        "Player session logout found nothing to remove (playerId={}, sessionId={})",
+                        lease.playerId,
+                        lease.sessionId,
                     )
                 is PlayerLogoutResult.Failed ->
                     logger.warn(
-                        "Player session logout failed (playerId={}, username={}, message={})",
-                        playerId,
-                        name,
+                        "Player session logout failed (playerId={}, sessionId={}, message={})",
+                        lease.playerId,
+                        lease.sessionId,
                         result.message,
                     )
             }
         }
     }
 
-    private fun deny(event: PreLoginEvent, message: Component) {
-        event.result = PreLoginEvent.PreLoginComponentResult.denied(message)
-    }
-
-    /**
-     * Keep the session pointing at the backend the player is actually on — a party warp wants to
-     * send someone to the leader's server, and that only works if we know where people are.
-     */
     @Subscribe
-    fun onServerConnected(event: ServerConnectedEvent): EventTask {
-        val playerId = event.player.uniqueId
-        val serverName = event.server.serverInfo.name
-        return EventTask.async { playerPresenceService.updateServer(playerId, serverName) }
+    fun onServerConnected(event: ServerConnectedEvent): EventTask =
+        EventTask.async {
+            val lease = playerPresenceService.lease(event.player) ?: return@async
+            playerPresenceService.updateServerExact(lease, event.server.serverInfo.name)
+        }
+
+    private fun deny(event: LoginEvent, message: Component) {
+        event.result = ResultedEvent.ComponentResult.denied(message)
     }
 
     private fun proxyId(): String = System.getenv("PROXY_ID") ?: ""
 
-    /**
-     * Empty when the proxy declares no region. Passed through as-is rather than defaulted to
-     * something plausible: an invented location is worse than an absent one, and the session schema
-     * treats unknown as a normal value.
-     */
     private fun region(): String = System.getenv("REGION") ?: ""
 
-    private fun watchForAbandonedLogin(playerId: UUID, name: String) {
-        pendingLogins.add(playerId)
+    fun transferToHost(player: Player, host: String, port: Int): Boolean {
+        return playerPresenceService.transferToHost(player, host, port)
+    }
+
+    private fun watchForAbandonedLogin(player: Player) {
         proxy.scheduler
-            .buildTask(plugin, Runnable { releaseAbandonedLogin(playerId, name) })
+            .buildTask(plugin, Runnable { releaseAbandonedLogin(player) })
             .delay(abandonedLoginGraceSeconds, TimeUnit.SECONDS)
             .schedule()
     }
 
-    private fun releaseAbandonedLogin(playerId: UUID, name: String) {
-        val online = proxy.getPlayer(playerId).isPresent
-        if (!shouldReleaseAbandonedLogin(pendingLogins, playerId, online)) return
-
-        val result = playerPresenceService.logout(playerId, proxyId())
+    private fun releaseAbandonedLogin(player: Player) {
+        if (
+            !shouldReleaseAbandonedLogin(
+                pendingLogins,
+                player,
+                proxy.getPlayer(player.uniqueId).orElse(null) === player,
+            )
+        )
+            return
+        val lease = playerPresenceService.remove(player) ?: return
+        val result = playerPresenceService.logoutExact(lease)
         logger.info(
-            "Player session released after abandoned login (playerId={}, username={}, removed={})",
-            playerId,
-            name,
+            "Player session released after abandoned login (playerId={}, sessionId={}, removed={})",
+            lease.playerId,
+            lease.sessionId,
             result == PlayerLogoutResult.Removed,
         )
     }
 
     companion object {
-        /**
-         * Long enough for a normal login to finish (auth, config phase, first server connect),
-         * short enough that a player retrying after a crash is not locked out.
-         */
         const val DEFAULT_ABANDONED_LOGIN_GRACE_SECONDS = 15L
+        const val COOKIE_TIMEOUT_SECONDS = 3L
+        const val MAX_HANDOFF_COOKIE_BYTES = 4096
+        val HANDOFF_COOKIE: Key = PlayerPresenceService.HANDOFF_COOKIE
 
-        /**
-         * True when the session this proxy created belongs to a connection that never arrived.
-         *
-         * Consumes the pending marker either way, so a second run cannot log out a player who
-         * reconnected in the meantime.
-         */
         @JvmStatic
-        fun shouldReleaseAbandonedLogin(
-            pending: MutableSet<UUID>,
-            playerId: UUID,
+        fun <T : Any> shouldReleaseAbandonedLogin(
+            pending: MutableSet<T>,
+            player: T,
             playerOnline: Boolean,
-        ): Boolean {
-            val wasPending = pending.remove(playerId)
-            return wasPending && !playerOnline
-        }
+        ): Boolean = pending.remove(player) && !playerOnline
     }
 }

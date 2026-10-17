@@ -7,6 +7,8 @@ import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -21,9 +23,16 @@ class HttpPlayerPresenceClientTest {
 
     /** Path -> what to answer with. Recorded requests land in [seen]. */
     private val routes = ConcurrentHashMap<String, Pair<Int, String>>()
+    private val queuedRoutes = ConcurrentHashMap<String, ConcurrentLinkedQueue<Pair<Int, String>>>()
     private val seen = ConcurrentHashMap<String, RecordedRequest>()
+    private val requests = ConcurrentHashMap<String, CopyOnWriteArrayList<RecordedRequest>>()
 
-    data class RecordedRequest(val method: String, val query: String?, val authorization: String?)
+    data class RecordedRequest(
+        val method: String,
+        val query: String?,
+        val authorization: String?,
+        val body: String,
+    )
 
     @BeforeEach
     fun startServer() {
@@ -45,13 +54,17 @@ class HttpPlayerPresenceClientTest {
 
     private fun answer(exchange: HttpExchange) {
         val path = exchange.requestURI.path
-        seen[path] =
+        val recorded =
             RecordedRequest(
                 method = exchange.requestMethod,
                 query = exchange.requestURI.query,
                 authorization = exchange.requestHeaders.getFirst("Authorization"),
+                body =
+                    exchange.requestBody.use { String(it.readAllBytes(), StandardCharsets.UTF_8) },
             )
-        val (status, body) = routes[path] ?: (404 to "")
+        seen[path] = recorded
+        requests.computeIfAbsent(path) { CopyOnWriteArrayList() }.add(recorded)
+        val (status, body) = queuedRoutes[path]?.poll() ?: routes[path] ?: (404 to "")
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.add("Content-Type", "application/json")
         // A 204 must not carry a body, and the JDK server enforces it.
@@ -72,6 +85,96 @@ class HttpPlayerPresenceClientTest {
 
         assertEquals(PlayerLoginResult.Accepted, result)
         assertEquals("Bearer test-token", seen["/v1/players/sessions"]?.authorization)
+    }
+
+    @Test
+    fun `exact login claims the authenticated profile and connection identity`() {
+        routes["/v2/players/sessions"] =
+            201 to
+                """{"playerId":"$PLAYER_ID","sessionId":"$SESSION_ID","leaseExpiresAt":"2026-08-04T10:01:00Z"}"""
+
+        val result = client.claimExactSession(PLAYER_ID, SESSION_ID, "Notch", "velocity-1", "eu")
+
+        assertEquals(
+            ExactPlayerLoginResult.Accepted(AdmittedPlayerSession(SESSION_ID, 1785837660000L)),
+            result,
+        )
+        assertEquals("POST", seen["/v2/players/sessions"]?.method)
+    }
+
+    @Test
+    fun `exact login retries an uncertain claim with the same connection identity`() {
+        queuedRoutes["/v2/players/sessions"] =
+            ConcurrentLinkedQueue(
+                listOf(
+                    503 to """{"detail":"temporary failure"}""",
+                    201 to
+                        """{"playerId":"$PLAYER_ID","sessionId":"$SESSION_ID","leaseExpiresAt":"2026-08-04T10:01:00Z"}""",
+                )
+            )
+
+        val result = client.claimExactSession(PLAYER_ID, SESSION_ID, "Notch", "velocity-1", "eu")
+
+        assertTrue(result is ExactPlayerLoginResult.Accepted)
+        assertEquals(2, requests["/v2/players/sessions"]?.size)
+        assertTrue(
+            requests["/v2/players/sessions"]!!.all {
+                it.body.contains("\"sessionId\":\"$SESSION_ID\"")
+            }
+        )
+    }
+
+    @Test
+    fun `exact login cleans only its own lease after repeated unknown responses`() {
+        queuedRoutes["/v2/players/sessions"] = ConcurrentLinkedQueue(listOf(503 to "", 503 to ""))
+        routes["/v2/players/$PLAYER_ID/session"] = 204 to ""
+
+        val result = client.claimExactSession(PLAYER_ID, SESSION_ID, "Notch", "velocity-1", "eu")
+
+        assertTrue(result is ExactPlayerLoginResult.Unavailable)
+        assertEquals("DELETE", seen["/v2/players/$PLAYER_ID/session"]?.method)
+        assertEquals("sessionId=$SESSION_ID", seen["/v2/players/$PLAYER_ID/session"]?.query)
+    }
+
+    @Test
+    fun `exact mutations carry both profile and connection identity`() {
+        routes["/v2/players/sessions/heartbeats"] = 200 to """{"updated":1,"missing":0}"""
+        routes["/v2/players/$PLAYER_ID/session"] = 204 to ""
+        routes["/v2/players/$PLAYER_ID/session/server"] = 204 to ""
+
+        assertTrue(client.heartbeatExactSessions(listOf(PLAYER_ID to SESSION_ID)).success)
+        assertEquals(PlayerLogoutResult.Removed, client.logoutExactSession(PLAYER_ID, SESSION_ID))
+        assertTrue(client.updateExactSessionServer(PLAYER_ID, SESSION_ID, "lobby"))
+        assertEquals("sessionId=$SESSION_ID", seen["/v2/players/$PLAYER_ID/session"]?.query)
+    }
+
+    @Test
+    fun `a transfer handoff is issued by an exact source session and consumed into a new lease`() {
+        routes["/v2/players/$PLAYER_ID/session/transfer"] =
+            201 to """{"token":"opaque-one-use-token","expiresAt":"2026-08-04T10:00:15Z"}"""
+        routes["/v2/players/sessions/transfer"] =
+            201 to
+                """{"playerId":"$PLAYER_ID","sessionId":"$DESTINATION_SESSION_ID","leaseExpiresAt":"2026-08-04T10:01:00Z"}"""
+
+        val token = client.issueHandoff(PLAYER_ID, SESSION_ID)
+        val admitted =
+            client.consumeHandoff(
+                PLAYER_ID,
+                DESTINATION_SESSION_ID,
+                token!!.token,
+                "Notch",
+                "velocity-2",
+                "eu",
+            )
+
+        assertEquals(1785837615000L, token.expiresAtMillis)
+        assertEquals("POST", seen["/v2/players/$PLAYER_ID/session/transfer"]?.method)
+        assertEquals(
+            ExactPlayerLoginResult.Accepted(
+                AdmittedPlayerSession(DESTINATION_SESSION_ID, 1785837660000L)
+            ),
+            admitted,
+        )
     }
 
     @Test
@@ -272,5 +375,8 @@ class HttpPlayerPresenceClientTest {
 
     companion object {
         private val PLAYER_ID: UUID = UUID.fromString("8f3a1c2e-4b5d-4e6f-8a9b-0c1d2e3f4a5b")
+        private val SESSION_ID: UUID = UUID.fromString("f89a7a2f-8812-4d32-84f2-688a1f7eb019")
+        private val DESTINATION_SESSION_ID: UUID =
+            UUID.fromString("1e2011d1-2ef4-4c3c-8a57-14ce0b0b5a11")
     }
 }

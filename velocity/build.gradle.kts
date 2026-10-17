@@ -15,13 +15,13 @@ dependencies {
     implementation("gg.grounds:library-i18n:0.4.4")
     // plugin-proxy owns the ProxyServiceRegistry at runtime — compileOnly, never shaded, or the
     // registry this plugin writes into would be a different class from the one chat/social read.
-    compileOnly("gg.grounds:plugin-proxy-api:2.6.0")
+    compileOnly("gg.grounds:plugin-proxy-api:2.8.0")
     implementation("tools.jackson.dataformat:jackson-dataformat-yaml:3.2.3")
     implementation("tools.jackson.module:jackson-module-kotlin:3.2.3")
 
     // compileOnly above is not visible to tests; PlayerSessionQueryImplTest needs the interface's
     // types.
-    testImplementation("gg.grounds:plugin-proxy-api:2.6.0")
+    testImplementation("gg.grounds:plugin-proxy-api:2.8.0")
     // Same reason: the conventions plugin puts velocity-api on compileOnly, and
     // EditionStampListenerTest builds a GameProfile.Property.
     testImplementation("com.velocitypowered:velocity-api:3.5.0-SNAPSHOT")

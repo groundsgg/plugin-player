@@ -39,6 +39,21 @@ sealed class PlayerLoginResult {
     data class Error(val message: String) : PlayerLoginResult()
 }
 
+/** One admitted physical connection, including the lease boundary the proxy must respect. */
+data class AdmittedPlayerSession(val sessionId: UUID, val leaseExpiresAtMillis: Long)
+
+data class SessionHandoff(val token: String, val expiresAtMillis: Long)
+
+sealed class ExactPlayerLoginResult {
+    data class Accepted(val session: AdmittedPlayerSession) : ExactPlayerLoginResult()
+
+    data object AlreadyOnline : ExactPlayerLoginResult()
+
+    data class Unavailable(val message: String) : ExactPlayerLoginResult()
+
+    data class Error(val message: String) : ExactPlayerLoginResult()
+}
+
 /** What came of releasing a session. Only [Removed] means this proxy actually held one. */
 sealed class PlayerLogoutResult {
     data object Removed : PlayerLogoutResult()
