@@ -5,6 +5,7 @@ import com.velocitypowered.api.scheduler.ScheduledTask
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.min
+import net.kyori.adventure.text.Component
 import org.slf4j.Logger
 
 class PlayerHeartbeatScheduler(
@@ -50,31 +51,62 @@ class PlayerHeartbeatScheduler(
     }
 
     private fun sendHeartbeats() {
-        val playerIds = proxy.allPlayers.map { it.uniqueId }
-        if (playerIds.isEmpty()) {
+        val players = proxy.allPlayers
+        val leases = presenceService.leasesFor(players)
+        if (leases.isEmpty()) {
             return
         }
 
-        val result = presenceService.heartbeatBatch(playerIds)
-        if (!result.success) {
+        val result = presenceService.heartbeatExact(leases)
+        if (!result.success || result.missing > 0 || result.updated != leases.size) {
+            val interval =
+                resolveHeartbeatIntervalSeconds(
+                    System.getenv(HEARTBEAT_INTERVAL_ENV),
+                    System.getenv(SESSION_TTL_ENV),
+                )
+            val now = System.currentTimeMillis()
+            val cutoff = now + interval.effectiveIntervalSeconds * 1_000L + REQUEST_TIMEOUT_MILLIS
+            val expired = leases.filter { it.leaseExpiresAtMillis <= cutoff }
+            if (result.success && (result.missing > 0 || result.updated != leases.size)) {
+                // The aggregate response cannot tell us which exact lease is missing; fail closed.
+                leases.forEach { lease ->
+                    players
+                        .firstOrNull { player ->
+                            presenceService.lease(player)?.sessionId == lease.sessionId
+                        }
+                        ?.disconnect(
+                            Component.text("Your session could not be verified. Please reconnect.")
+                        )
+                }
+            } else {
+                expired.forEach { lease ->
+                    players
+                        .firstOrNull { player ->
+                            presenceService.lease(player)?.sessionId == lease.sessionId
+                        }
+                        ?.disconnect(
+                            Component.text("Presence verification expired. Please reconnect.")
+                        )
+                }
+            }
             logger.error(
                 "Player session heartbeat batch failed (playerCount={}, updated={}, missing={}, reason={})",
-                playerIds.size,
+                leases.size,
                 result.updated,
                 result.missing,
                 result.message,
             )
-        } else if (result.missing > 0) {
-            logger.warn(
-                "Player session heartbeat batch completed with missing sessions (playerCount={}, updated={}, missing={})",
-                playerIds.size,
-                result.updated,
-                result.missing,
-            )
         } else {
+            val ttlMillis =
+                resolveHeartbeatIntervalSeconds(
+                        System.getenv(HEARTBEAT_INTERVAL_ENV),
+                        System.getenv(SESSION_TTL_ENV),
+                    )
+                    .sessionTtlSeconds * 1_000L
+            presenceService.confirmHeartbeat(leases, ttlMillis)
             logger.debug(
                 "Player session heartbeat batch completed (playerCount={}, updated={}, missing={}, result=success)",
-                playerIds.size,
+                leases.size,
                 result.updated,
                 result.missing,
             )
@@ -94,6 +126,7 @@ class PlayerHeartbeatScheduler(
         private const val DEFAULT_SESSION_TTL_SECONDS = 90L
         private const val HEARTBEAT_INTERVAL_ENV = "PLAYER_PRESENCE_HEARTBEAT_SECONDS"
         private const val SESSION_TTL_ENV = "PLAYER_SESSIONS_TTL"
+        private const val REQUEST_TIMEOUT_MILLIS = 2_000L
 
         internal fun resolveHeartbeatIntervalSeconds(
             heartbeatIntervalRaw: String?,

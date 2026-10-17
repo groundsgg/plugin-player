@@ -6,7 +6,6 @@ import com.velocitypowered.api.event.connection.PostLoginEvent
 import com.velocitypowered.api.network.HandshakeIntent
 import com.velocitypowered.api.network.ProtocolVersion
 import gg.grounds.presence.PlayerPresenceService
-import java.net.InetSocketAddress
 import java.util.UUID
 import org.slf4j.Logger
 
@@ -51,7 +50,12 @@ class PreferredRegionListener(
                     target.host,
                     target.port,
                 )
-                player.transferToHost(InetSocketAddress.createUnresolved(target.host, target.port))
+                if (!presence.transferToHost(player, target.host, target.port)) {
+                    logger.warn(
+                        "Preferred-region redirect skipped because session handoff could not be issued (player={})",
+                        player.username,
+                    )
+                }
             } catch (e: RuntimeException) {
                 logger.warn("Preferred-region redirect skipped (player={})", player.username, e)
             }

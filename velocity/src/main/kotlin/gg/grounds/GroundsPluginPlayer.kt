@@ -22,9 +22,11 @@ import gg.grounds.locale.listener.LocaleConnectionListener
 import gg.grounds.presence.PlayerHeartbeatScheduler
 import gg.grounds.presence.PlayerPresenceService
 import gg.grounds.presence.PlayerSessionQueryImpl
+import gg.grounds.presence.PlayerSessionTransferImpl
 import gg.grounds.presentation.VelocitySystemMessages
 import gg.grounds.proxy.api.PlayerLocaleQuery
 import gg.grounds.proxy.api.PlayerSessionQuery
+import gg.grounds.proxy.api.PlayerSessionTransfer
 import gg.grounds.proxy.api.ProxyServiceRegistry
 import gg.grounds.region.PreferredRegionListener
 import gg.grounds.region.PreferredRegionPolicy
@@ -69,6 +71,7 @@ constructor(
             )
         val serviceUrl = resolveServiceUrl()
         playerPresenceService.configure(serviceUrl)
+        val floodgate = FloodgateLookup.create(logger)
 
         proxy.eventManager.register(
             this,
@@ -88,6 +91,12 @@ constructor(
             PlayerSessionQuery::class.java,
             PlayerSessionQueryImpl(playerPresenceService),
         )
+        ProxyServiceRegistry.register(
+            PlayerSessionTransfer::class.java,
+            PlayerSessionTransferImpl(proxy, playerPresenceService) { id ->
+                id.mostSignificantBits == 0L || floodgate?.isBedrock(id) == true
+            },
+        )
 
         // Per-player language: seed the cache on join, publish it to localized plugins (social),
         // and let the player change it with /lang.
@@ -105,7 +114,6 @@ constructor(
         )
 
         registerLinkCommands(translations)
-        val floodgate = FloodgateLookup.create(logger)
         registerEditionStamp(floodgate)
         registerPreferredRegion(floodgate)
 
@@ -191,6 +199,7 @@ constructor(
     @Subscribe
     fun onShutdown(event: ProxyShutdownEvent) {
         ProxyServiceRegistry.unregister(PlayerSessionQuery::class.java)
+        ProxyServiceRegistry.unregister(PlayerSessionTransfer::class.java)
         ProxyServiceRegistry.unregister(PlayerLocaleQuery::class.java)
         playerLocaleCache.clear()
         heartbeatScheduler.stop()

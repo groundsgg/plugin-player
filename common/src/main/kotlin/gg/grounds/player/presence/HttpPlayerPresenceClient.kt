@@ -73,6 +73,190 @@ class HttpPlayerPresenceClient(
         }
     }
 
+    /** Claims the final authenticated profile under a per-connection fencing UUID. */
+    fun claimExactSession(
+        playerId: UUID,
+        sessionId: UUID,
+        playerName: String,
+        proxyId: String,
+        region: String,
+    ): ExactPlayerLoginResult {
+        val body =
+            mapper.writeValueAsString(
+                mapOf(
+                    "playerId" to playerId.toString(),
+                    "sessionId" to sessionId.toString(),
+                    "playerName" to playerName,
+                    "proxyId" to proxyId,
+                    "region" to region,
+                )
+            )
+        val claimRequest = {
+            request("/v2/players/sessions")
+                .header("Content-Type", APPLICATION_JSON)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+        }
+        var response: HttpResponse<String>? = null
+        var attempts = 0
+        while (attempts < EXACT_CLAIM_ATTEMPTS) {
+            val current = send(claimRequest())
+            attempts++
+            response = current
+            if (current != null && current.statusCode() !in 500..599) break
+        }
+        val finalResponse = response
+        if (finalResponse == null || finalResponse.statusCode() in 500..599) {
+            // The first request may have committed while its response was lost. This random ID is
+            // unique to this connection, so an exact cleanup cannot touch a later connection.
+            logoutExactSession(playerId, sessionId)
+            return ExactPlayerLoginResult.Unavailable(
+                finalResponse?.let { problemDetail(it.body()) } ?: "presence service did not answer"
+            )
+        }
+        return when (finalResponse.statusCode()) {
+            201 -> {
+                val json = parse(finalResponse.body())
+                val returnedId =
+                    runCatching { UUID.fromString(json?.get("sessionId")?.asString()) }.getOrNull()
+                val expiry = json?.get("leaseExpiresAt")?.asString()
+                if (returnedId == sessionId && expiry != null) {
+                    ExactPlayerLoginResult.Accepted(
+                        AdmittedPlayerSession(sessionId, parseInstantMillis(expiry))
+                    )
+                } else
+                    ExactPlayerLoginResult.Error(
+                        "presence service returned an invalid session lease"
+                    )
+            }
+            409 -> ExactPlayerLoginResult.AlreadyOnline
+            in 500..599 -> ExactPlayerLoginResult.Unavailable(problemDetail(finalResponse.body()))
+            else -> ExactPlayerLoginResult.Error("unexpected status ${finalResponse.statusCode()}")
+        }
+    }
+
+    /** Renew exact profile/session pairs. A missing lease is a fence signal to the caller. */
+    fun heartbeatExactSessions(sessions: Collection<Pair<UUID, UUID>>): PlayerHeartbeatResult {
+        val body =
+            mapper.writeValueAsString(
+                mapOf(
+                    "sessions" to
+                        sessions.map { (playerId, sessionId) ->
+                            mapOf(
+                                "playerId" to playerId.toString(),
+                                "sessionId" to sessionId.toString(),
+                            )
+                        }
+                )
+            )
+        val response =
+            send(
+                request("/v2/players/sessions/heartbeats")
+                    .header("Content-Type", APPLICATION_JSON)
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+            )
+                ?: return PlayerHeartbeatResult(
+                    false,
+                    "presence service did not answer",
+                    0,
+                    sessions.size,
+                )
+        if (response.statusCode() != 200)
+            return PlayerHeartbeatResult(false, problemDetail(response.body()), 0, sessions.size)
+        val json = parse(response.body())
+        return PlayerHeartbeatResult(
+            true,
+            "heartbeat accepted",
+            json?.get("updated")?.asInt() ?: 0,
+            json?.get("missing")?.asInt() ?: 0,
+        )
+    }
+
+    fun logoutExactSession(playerId: UUID, sessionId: UUID): PlayerLogoutResult {
+        val response =
+            send(request("/v2/players/$playerId/session?sessionId=$sessionId").DELETE())
+                ?: return PlayerLogoutResult.Failed("presence service did not answer")
+        return when (response.statusCode()) {
+            204 -> PlayerLogoutResult.Removed
+            404 -> PlayerLogoutResult.NotFound
+            else -> PlayerLogoutResult.Failed("unexpected status ${response.statusCode()}")
+        }
+    }
+
+    fun updateExactSessionServer(playerId: UUID, sessionId: UUID, serverName: String): Boolean {
+        val body =
+            mapper.writeValueAsString(
+                mapOf("sessionId" to sessionId.toString(), "serverName" to serverName)
+            )
+        val response =
+            send(
+                request("/v2/players/$playerId/session/server")
+                    .header("Content-Type", APPLICATION_JSON)
+                    .PUT(HttpRequest.BodyPublishers.ofString(body))
+            ) ?: return false
+        return response.statusCode() == 204
+    }
+
+    fun issueHandoff(playerId: UUID, sessionId: UUID): SessionHandoff? {
+        val body = mapper.writeValueAsString(mapOf("sessionId" to sessionId.toString()))
+        val response =
+            send(
+                request("/v2/players/$playerId/session/transfer")
+                    .header("Content-Type", APPLICATION_JSON)
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+            ) ?: return null
+        if (response.statusCode() != 201) return null
+        val json = parse(response.body()) ?: return null
+        val token = json.get("token")?.asString()?.takeIf(String::isNotBlank) ?: return null
+        val expiry = json.get("expiresAt")?.asString() ?: return null
+        return SessionHandoff(token, parseInstantMillis(expiry))
+    }
+
+    fun consumeHandoff(
+        playerId: UUID,
+        sessionId: UUID,
+        token: String,
+        playerName: String,
+        proxyId: String,
+        region: String,
+    ): ExactPlayerLoginResult {
+        val body =
+            mapper.writeValueAsString(
+                mapOf(
+                    "playerId" to playerId.toString(),
+                    "sessionId" to sessionId.toString(),
+                    "handoffToken" to token,
+                    "playerName" to playerName,
+                    "proxyId" to proxyId,
+                    "region" to region,
+                )
+            )
+        val response =
+            send(
+                request("/v2/players/sessions/transfer")
+                    .header("Content-Type", APPLICATION_JSON)
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+            ) ?: return ExactPlayerLoginResult.Unavailable("presence service did not answer")
+        return when (response.statusCode()) {
+            201 -> {
+                val json = parse(response.body())
+                val returnedId =
+                    runCatching { UUID.fromString(json?.get("sessionId")?.asString()) }.getOrNull()
+                val expiry = json?.get("leaseExpiresAt")?.asString()
+                if (returnedId == sessionId && expiry != null)
+                    ExactPlayerLoginResult.Accepted(
+                        AdmittedPlayerSession(sessionId, parseInstantMillis(expiry))
+                    )
+                else
+                    ExactPlayerLoginResult.Error(
+                        "presence service returned an invalid transferred lease"
+                    )
+            }
+            409 -> ExactPlayerLoginResult.AlreadyOnline
+            in 500..599 -> ExactPlayerLoginResult.Unavailable(problemDetail(response.body()))
+            else -> ExactPlayerLoginResult.Error("unexpected status ${response.statusCode()}")
+        }
+    }
+
     /**
      * Releases this proxy's session for a player.
      *
@@ -294,6 +478,7 @@ class HttpPlayerPresenceClient(
     companion object {
         private const val APPLICATION_JSON = "application/json"
         private const val PROBLEM_JSON = "application/problem+json"
+        private const val EXACT_CLAIM_ATTEMPTS = 2
         private val CONNECT_TIMEOUT = Duration.ofSeconds(2)
 
         /**
