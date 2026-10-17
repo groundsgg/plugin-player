@@ -12,7 +12,7 @@ repositories {
 
 dependencies {
     implementation(project(":common"))
-    implementation("gg.grounds:library-i18n:0.4.3")
+    implementation("gg.grounds:library-i18n:0.4.4")
     // plugin-proxy owns the ProxyServiceRegistry at runtime — compileOnly, never shaded, or the
     // registry this plugin writes into would be a different class from the one chat/social read.
     compileOnly("gg.grounds:plugin-proxy-api:2.6.0")
