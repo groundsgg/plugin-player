@@ -6,12 +6,12 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.velocitypowered.api.command.BrigadierCommand
 import com.velocitypowered.api.command.CommandSource
 import com.velocitypowered.api.proxy.Player
+import gg.grounds.PlayerMessage
+import gg.grounds.i18n.Translations
 import gg.grounds.locale.PlayerLocaleCache
 import gg.grounds.locale.SupportedLanguages
 import gg.grounds.presence.PlayerPresenceService
 import java.util.concurrent.CompletableFuture
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
 import org.slf4j.Logger
 
 /**
@@ -28,11 +28,12 @@ object LangCommand {
         cache: PlayerLocaleCache,
         presence: PlayerPresenceService,
         logger: Logger,
+        messages: Translations,
     ): BrigadierCommand {
         val node =
             LiteralArgumentBuilder.literal<CommandSource>("lang")
                 .executes { ctx ->
-                    ctx.source.sendMessage(usage())
+                    messages.send(ctx.source, PlayerMessage.LANG_USAGE, "available" to available())
                     1
                 }
                 .then(
@@ -47,31 +48,24 @@ object LangCommand {
                         .executes { ctx ->
                             val player = ctx.source as? Player
                             if (player == null) {
-                                ctx.source.sendMessage(
-                                    Component.text(
-                                        "Only players can use this command.",
-                                        NamedTextColor.RED,
-                                    )
-                                )
+                                messages.send(ctx.source, PlayerMessage.LANG_PLAYERS_ONLY)
                                 return@executes 1
                             }
 
                             val code = StringArgumentType.getString(ctx, "code").lowercase()
                             val locale = SupportedLanguages.parse(code)
                             if (locale == null) {
-                                player.sendMessage(
-                                    Component.text(
-                                        "Unknown language '$code'. Available: ${available()}",
-                                        NamedTextColor.RED,
-                                    )
+                                messages.send(
+                                    player,
+                                    PlayerMessage.LANG_UNKNOWN,
+                                    "code" to code,
+                                    "available" to available(),
                                 )
                                 return@executes 1
                             }
 
                             cache.choose(player, locale)
-                            player.sendMessage(
-                                Component.text("Language set to $code.", NamedTextColor.GREEN)
-                            )
+                            messages.send(player, PlayerMessage.LANG_SET, "code" to code)
                             CompletableFuture.runAsync {
                                 if (!presence.setLocale(player.uniqueId, code)) {
                                     logger.warn(
@@ -87,9 +81,6 @@ object LangCommand {
 
         return BrigadierCommand(node.build())
     }
-
-    private fun usage(): Component =
-        Component.text("Usage: /lang <code>. Available: ${available()}", NamedTextColor.YELLOW)
 
     private fun available(): String = SupportedLanguages.ALL.keys.joinToString(", ")
 }
