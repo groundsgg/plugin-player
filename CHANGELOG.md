@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/groundsgg/plugin-player/compare/v1.3.0...v1.4.0) (2026-10-17)
+
+
+### Features
+
+* **chat:** unify localized player messages ([#49](https://github.com/groundsgg/plugin-player/issues/49)) ([d624a3a](https://github.com/groundsgg/plugin-player/commit/d624a3a43e3367890a3f5b624f4cbbca5daf8588))
+
 ## [1.3.0](https://github.com/groundsgg/plugin-player/compare/v1.2.0...v1.3.0) (2026-10-15)
 
 
