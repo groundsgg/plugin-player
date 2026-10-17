@@ -124,8 +124,9 @@ class EditionStampListenerTest {
                 throw ClassNotFoundException("Floodgate intentionally absent")
             }
 
-        assertEquals(false, lookup.classify(PLAYER_ID))
-        assertFalse(lookup.isBedrock(PLAYER_ID))
+        val xuidShapedId = UUID.fromString("00000000-0000-0000-0009-01f64d9a38a8")
+        assertEquals(false, lookup.classify(xuidShapedId))
+        assertFalse(lookup.isBedrock(xuidShapedId))
     }
 
     @Test

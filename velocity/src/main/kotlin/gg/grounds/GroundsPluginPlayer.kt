@@ -94,7 +94,7 @@ constructor(
         ProxyServiceRegistry.register(
             PlayerSessionTransfer::class.java,
             PlayerSessionTransferImpl(proxy, playerPresenceService) { id ->
-                id.mostSignificantBits == 0L || floodgate?.isBedrock(id) == true
+                floodgate?.isBedrock(id) == true
             },
         )
 
@@ -155,10 +155,8 @@ constructor(
             PreferredRegionListener(
                 policy = PreferredRegionPolicy(catalog, currentCode),
                 presence = playerPresenceService,
-                // Floodgate where it is installed; otherwise the shape of an unlinked Bedrock UUID.
-                isBedrock = { id ->
-                    id.mostSignificantBits == 0L || floodgate?.isBedrock(id) == true
-                },
+                // UUID shape alone is not authenticated edition evidence.
+                isBedrock = { id -> floodgate?.isBedrock(id) == true },
                 logger = logger,
             ),
         )
