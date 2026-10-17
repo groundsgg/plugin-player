@@ -26,6 +26,9 @@ import gg.grounds.presentation.VelocitySystemMessages
 import gg.grounds.proxy.api.PlayerLocaleQuery
 import gg.grounds.proxy.api.PlayerSessionQuery
 import gg.grounds.proxy.api.ProxyServiceRegistry
+import gg.grounds.region.PreferredRegionListener
+import gg.grounds.region.PreferredRegionPolicy
+import gg.grounds.region.RegionCatalog
 import java.nio.file.Path
 import org.slf4j.Logger
 
@@ -102,19 +105,59 @@ constructor(
         )
 
         registerLinkCommands(translations)
-        registerEditionStamp()
+        val floodgate = FloodgateLookup.create(logger)
+        registerEditionStamp(floodgate)
+        registerPreferredRegion(floodgate)
 
         heartbeatScheduler.start()
         logger.info("Configured player presence client (serviceUrl={})", serviceUrl)
     }
 
-    /** Stamps an authenticated Java or Bedrock edition into the signed forwarding profile. */
-    private fun registerEditionStamp() {
-        val floodgate = FloodgateLookup.create(logger)
+    /**
+     * Tells backends which of their players came from Bedrock, by stamping a property onto the
+     * signed part of the forwarding payload.
+     *
+     * Only the Bedrock proxy carries Floodgate, so on the Java proxies there is nothing to ask and
+     * the listener is not registered at all — rather than registered and answering "Java" for
+     * everyone, which is the same outcome for more moving parts.
+     */
+    private fun registerEditionStamp(floodgate: FloodgateLookup?) {
+        if (floodgate == null) {
+            logger.debug("Floodgate not installed; backends see no edition marker from this proxy")
+            return
+        }
         proxy.eventManager.register(this, EditionStampListener(floodgate, logger))
         logger.info(
             "Marking authenticated player edition for backends ({})",
             EditionStampListener.PROPERTY,
+        )
+    }
+
+    /**
+     * Moves a joining player to the region they prefer when geo-steering put them elsewhere. The
+     * catalogue and this proxy's continent come from the chart (`REGIONS`, `CONTINENT`); without
+     * another region in the catalogue the listener never asks service-player.
+     */
+    private fun registerPreferredRegion(floodgate: FloodgateLookup?) {
+        val catalog = RegionCatalog.parse(System.getenv("REGIONS"))
+        val currentCode =
+            PreferredRegionPolicy.currentCode(System.getenv("CONTINENT"), System.getenv("REGION"))
+        proxy.eventManager.register(
+            this,
+            PreferredRegionListener(
+                policy = PreferredRegionPolicy(catalog, currentCode),
+                presence = playerPresenceService,
+                // Floodgate where it is installed; otherwise the shape of an unlinked Bedrock UUID.
+                isBedrock = { id ->
+                    id.mostSignificantBits == 0L || floodgate?.isBedrock(id) == true
+                },
+                logger = logger,
+            ),
+        )
+        logger.info(
+            "Preferred-region redirect configured (region={}, catalogue={})",
+            currentCode,
+            catalog.regions.joinToString(",") { it.code },
         )
     }
 

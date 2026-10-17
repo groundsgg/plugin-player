@@ -224,6 +224,34 @@ class HttpPlayerPresenceClientTest {
     }
 
     @Test
+    fun `a stored region is read`() {
+        routes["/v1/players/$PLAYER_ID/region"] = 200 to """{"region":"eu"}"""
+
+        assertEquals("eu", client.getRegion(PLAYER_ID))
+    }
+
+    @Test
+    fun `no region, a never-seen player and a failure all read as none`() {
+        routes["/v1/players/$PLAYER_ID/region"] = 200 to """{"region":null}"""
+        assertNull(client.getRegion(PLAYER_ID))
+
+        routes.remove("/v1/players/$PLAYER_ID/region") // 404
+        assertNull(client.getRegion(PLAYER_ID))
+
+        routes["/v1/players/$PLAYER_ID/region"] = 503 to ""
+        assertNull(client.getRegion(PLAYER_ID))
+    }
+
+    @Test
+    fun `storing a region reports whether it landed`() {
+        routes["/v1/players/$PLAYER_ID/region"] = 204 to ""
+
+        assertTrue(client.setRegion(PLAYER_ID, "na"))
+        assertEquals("PUT", seen["/v1/players/$PLAYER_ID/region"]?.method)
+        assertTrue(client.setRegion(PLAYER_ID, null))
+    }
+
+    @Test
     fun `a server move that matched no session is false`() {
         routes["/v1/players/$PLAYER_ID/session/server"] = 404 to """{"code":"not_found"}"""
 
