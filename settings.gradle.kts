@@ -1,6 +1,6 @@
 rootProject.name = "plugin-player"
 
-include("common", "velocity")
+include("common", "velocity", "minestom")
 
 pluginManagement {
     repositories {
