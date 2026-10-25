@@ -76,7 +76,7 @@ class GroundsSettingsModule : GroundsModule {
     }
 
     companion object {
-        const val MODULE_ID = "grounds-settings"
+        const val MODULE_ID = "grounds.settings"
 
         /** Set by plugin-chat once the proxy confirmed the player's pack draws the chat logo. */
         private val CHAT_FONT_READY = Tag.Boolean("grounds:chat-font-ready")
