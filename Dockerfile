@@ -25,6 +25,9 @@ COPY gradlew settings.gradle.kts build.gradle.kts ./
 
 COPY common/ common/
 COPY velocity/ velocity/
+# settings.gradle.kts includes these; only :velocity is built, but Gradle needs their directories.
+COPY minestom/ minestom/
+COPY paper/ paper/
 
 # `:velocity:build` produces the shaded plugin JAR. plugin-proxy-api stays
 # compileOnly (never shaded): the ProxyServiceRegistry this plugin writes its
