@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/groundsgg/plugin-player/compare/v1.6.1...v1.7.0) (2026-10-25)
+
+
+### Features
+
+* **settings:** Chat & Voice tab with voice settings ([#64](https://github.com/groundsgg/plugin-player/issues/64)) ([78557ca](https://github.com/groundsgg/plugin-player/commit/78557ca0724fa9e6354592ad8c37b6aef6f3ae00))
+
 ## [1.6.1](https://github.com/groundsgg/plugin-player/compare/v1.6.0...v1.6.1) (2026-10-25)
 
 
