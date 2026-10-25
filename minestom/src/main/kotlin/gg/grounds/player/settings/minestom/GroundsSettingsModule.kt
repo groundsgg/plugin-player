@@ -20,6 +20,8 @@ import net.minestom.server.dialog.DialogAfterAction
 import net.minestom.server.dialog.DialogBody
 import net.minestom.server.dialog.DialogMetadata
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerCustomClickEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.tag.Tag
@@ -35,6 +37,7 @@ class GroundsSettingsModule : GroundsModule {
     override val id: String = MODULE_ID
 
     private var menu: SettingsMenu<Player>? = null
+    private var node: EventNode<Event>? = null
     private val commands = mutableListOf<Command>()
 
     override fun install(ctx: GroundsServerContext) {
@@ -53,6 +56,9 @@ class GroundsSettingsModule : GroundsModule {
         val node = ctx.eventNode("grounds-settings")
         node.addListener(PlayerCustomClickEvent::class.java) { menu.onClick(it.player, it.key) }
         node.addListener(PlayerDisconnectEvent::class.java) { menu.forget(it.player.uuid) }
+        // ctx.eventNode only creates the node; nothing fires until it hangs off the global handler.
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        this.node = node
         register("settings") { menu.open(it) }
         if (ctx.serverType == ServerType.LOBBY) {
             register("region") { menu.open(it, SettingsMenu.Tab.REGION) }
@@ -62,6 +68,8 @@ class GroundsSettingsModule : GroundsModule {
     override fun stop() {
         commands.forEach(MinecraftServer.getCommandManager()::unregister)
         commands.clear()
+        node?.let(MinecraftServer.getGlobalEventHandler()::removeChild)
+        node = null
         menu?.close()
         menu = null
     }
