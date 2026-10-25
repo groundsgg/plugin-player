@@ -6,6 +6,7 @@ import gg.grounds.player.settings.SettingsDialog
 import gg.grounds.player.settings.SettingsHooks
 import gg.grounds.player.settings.SettingsMenu
 import gg.grounds.player.settings.SettingsPlatform
+import gg.grounds.player.settings.VoiceSettings
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.ServerType
@@ -51,6 +52,7 @@ class GroundsSettingsModule : GroundsModule {
                 SettingsMenu.messages { (it as? Player)?.getTag(CHAT_FONT_READY) == true },
                 liveRegions = { hooks()?.liveRegions().orEmpty() },
                 onLanguageSaved = { player, tag -> hooks()?.languageSaved(player.uuid, tag) },
+                voiceChat = { ctx.services.get<VoiceSettings>() },
             )
         this.menu = menu
         val node = ctx.eventNode("grounds-settings")

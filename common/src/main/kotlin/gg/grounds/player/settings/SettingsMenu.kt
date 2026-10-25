@@ -39,6 +39,8 @@ class SettingsMenu<P : Audience>(
     private val liveRegions: () -> Collection<String> = { emptyList() },
     /** Runs after a language choice was stored; the tag is null for "follow the client". */
     private val onLanguageSaved: (P, String?) -> Unit = { _, _ -> },
+    /** This server's voice chat, or null when it has none. Read per use: modules install late. */
+    private val voiceChat: () -> VoiceSettings? = { null },
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(SettingsMenu::class.java)
 
@@ -67,11 +69,14 @@ class SettingsMenu<P : Audience>(
         val previews: MutableMap<Preview, Boolean> =
             Preview.entries.associateWith { true }.toMutableMap(),
         var globalChat: Boolean = true,
+        var voice: VoicePreferences = VoicePreferences(partyVoice = true, hints = true),
+        /** The player's voice when the menu opened; null when this server has no voice chat. */
+        val voiceStatus: VoiceStatus? = null,
     )
 
     /**
-     * The tabs down the left. [GENERAL], [REGION], [SOCIAL] and the chat tab's global chat row are
-     * real; the rest are previews for now.
+     * The tabs down the left. [GENERAL], [REGION], [SOCIAL] and the chat tab's global chat and
+     * voice rows are real; the rest are previews for now.
      */
     enum class Tab(
         internal val label: SettingsMessage,
@@ -142,6 +147,8 @@ class SettingsMenu<P : Audience>(
                         tab = tab,
                         live = liveRegions().map { it.lowercase() }.toSet(),
                         globalChat = client.globalChatEnabled(id),
+                        voice = client.voicePreferences(id),
+                        voiceStatus = voiceChat()?.status(id),
                     )
                 },
                 requests,
@@ -229,6 +236,25 @@ class SettingsMenu<P : Audience>(
                     },
                 ) {
                     state.globalChat = !enabled
+                }
+            }
+            PARTY_VOICE,
+            VOICE_HINTS -> {
+                val before = state.voice
+                val after =
+                    if (action == PARTY_VOICE) before.copy(partyVoice = !before.partyVoice)
+                    else before.copy(hints = !before.hints)
+                state.voice = after
+                save(
+                    player,
+                    state,
+                    {
+                        client.setVoicePreferences(id, after)
+                        // plugin-voice reads them at join; this server's applies them now
+                        voiceChat()?.preferencesChanged(id, after)
+                    },
+                ) {
+                    state.voice = before
                 }
             }
             else -> {
@@ -339,6 +365,8 @@ class SettingsMenu<P : Audience>(
         private val PRIVATE_MESSAGES: Key =
             Key.key(ClickTokens.NAMESPACE, "menu/settings/private-messages")
         private val GLOBAL_CHAT: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/global-chat")
+        private val PARTY_VOICE: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/party-voice")
+        private val VOICE_HINTS: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/voice-hints")
 
         /**
          * Extra body width beyond the canvas. The client wraps body text at less than the declared
@@ -404,7 +432,32 @@ class SettingsMenu<P : Audience>(
                         on = state.globalChat,
                         action = GLOBAL_CHAT,
                     )
-                    previews(c, state, text, first = 1)
+                    toggleRow(
+                        c,
+                        y = ROW_Y + ROW_PITCH,
+                        title = text(SettingsMessage.SETTINGS_PARTY_VOICE),
+                        description = text(SettingsMessage.SETTINGS_PARTY_VOICE_HINT),
+                        text = text,
+                        on = state.voice.partyVoice,
+                        action = PARTY_VOICE,
+                    )
+                    toggleRow(
+                        c,
+                        y = ROW_Y + 2 * ROW_PITCH,
+                        title = text(SettingsMessage.SETTINGS_VOICE_HINTS),
+                        description = text(SettingsMessage.SETTINGS_VOICE_HINTS_HINT),
+                        text = text,
+                        on = state.voice.hints,
+                        action = VOICE_HINTS,
+                    )
+                    infoRow(
+                        c,
+                        y = ROW_Y + 3 * ROW_PITCH,
+                        title = text(SettingsMessage.SETTINGS_VOICE),
+                        value = voiceName(state.voiceStatus, text),
+                        description = text(SettingsMessage.SETTINGS_VOICE_HINT),
+                    )
+                    previews(c, state, text, first = 4)
                 }
                 else -> previews(c, state, text, first = 0)
             }
@@ -495,6 +548,14 @@ class SettingsMenu<P : Audience>(
             )
         }
 
+        /** The voice row's value: where the player's voice is, or why there is none. */
+        internal fun voiceName(status: VoiceStatus?, text: (SettingsMessage) -> String): String =
+            when {
+                status == null -> text(SettingsMessage.SETTINGS_VOICE_UNAVAILABLE)
+                !status.connected -> text(SettingsMessage.SETTINGS_VOICE_DISCONNECTED)
+                else -> status.group ?: text(SettingsMessage.SETTINGS_VOICE_NEARBY)
+            }
+
         /** A heading on the grid line itself (dy 0), with its rule on the next line's top. */
         private fun section(c: BodyCanvas, title: String, y: Int) {
             c.label(title, X - 1, y, ACCENT, shadow = false)
@@ -553,6 +614,20 @@ class SettingsMenu<P : Audience>(
                 next,
                 Component.text(text(SettingsMessage.SETTINGS_NEXT), NamedTextColor.GRAY),
             )
+        }
+
+        /** A row that only shows a value: nothing to click, the tooltip explains it. */
+        private fun infoRow(
+            c: BodyCanvas,
+            y: Int,
+            title: String,
+            value: String,
+            description: String,
+        ) {
+            row(c, y)
+            c.label(title, X + 6, y + 5)
+            c.label(value, X + W - 8 - MenuFonts.textWidth(value), y + 5, NamedTextColor.YELLOW)
+            c.hit(X, y, W, 18, null, Component.text(description, NamedTextColor.GRAY))
         }
 
         private fun toggleRow(
