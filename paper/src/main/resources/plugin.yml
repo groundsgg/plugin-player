@@ -1,0 +1,4 @@
+name: GroundsSettings
+version: ${VERSION}
+main: gg.grounds.player.settings.paper.GroundsSettingsPaper
+api-version: 1.21

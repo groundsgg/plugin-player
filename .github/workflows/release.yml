@@ -12,3 +12,6 @@ permissions:
 jobs:
   reusable:
     uses: groundsgg/.github/.github/workflows/gradle-publish.yml@main
+    secrets:
+      # See ci.yml: resolving Minestom 26.3 needs a token not scoped to this repository alone.
+      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
