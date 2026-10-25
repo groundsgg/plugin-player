@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/groundsgg/plugin-player/compare/v1.5.0...v1.6.0) (2026-10-25)
+
+
+### Features
+
+* **settings:** /settings on every server ([#60](https://github.com/groundsgg/plugin-player/issues/60)) ([9fd2238](https://github.com/groundsgg/plugin-player/commit/9fd2238eed9480f9cfd1c19c7621ba334ac31a50))
+
 ## [1.5.0](https://github.com/groundsgg/plugin-player/compare/v1.4.0...v1.5.0) (2026-10-17)
 
 
