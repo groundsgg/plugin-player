@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/groundsgg/plugin-player/compare/v1.6.0...v1.6.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **settings:** hang the module's listeners off the global handler ([#62](https://github.com/groundsgg/plugin-player/issues/62)) ([98907c7](https://github.com/groundsgg/plugin-player/commit/98907c7a4459e451816db0bbc398d79cdcb126c2))
+
 ## [1.6.0](https://github.com/groundsgg/plugin-player/compare/v1.5.0...v1.6.0) (2026-10-25)
 
 
