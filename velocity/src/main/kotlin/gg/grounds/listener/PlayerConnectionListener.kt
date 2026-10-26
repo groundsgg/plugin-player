@@ -38,7 +38,7 @@ class PlayerConnectionListener(
         Collections.newSetFromMap(Collections.synchronizedMap(IdentityHashMap()))
     private val pendingTransfers: MutableSet<Player> =
         Collections.newSetFromMap(Collections.synchronizedMap(IdentityHashMap()))
-    private val handoffCookies = ConcurrentHashMap<Player, CompletableFuture<ByteArray>>()
+    private val handoffCookies = ConcurrentHashMap<Player, CompletableFuture<ByteArray?>>()
     private val mapper = JsonMapper.builder().build()
 
     @Subscribe
@@ -120,12 +120,23 @@ class PlayerConnectionListener(
     fun onPostLoginTransfer(event: PostLoginEvent): EventTask? {
         val player = event.player
         if (!pendingTransfers.remove(player)) return null
-        val cookie = CompletableFuture<ByteArray>()
+        val cookie = CompletableFuture<ByteArray?>()
         handoffCookies[player] = cookie
         return EventTask.async {
             try {
                 player.requestCookie(HANDOFF_COOKIE)
+                // Null when the sending proxy stored no handoff: a bare transfer packet.
                 val bytes = cookie.get(COOKIE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                if (bytes == null) {
+                    logger.warn(
+                        "Player session handoff missing (playerId={}, reason=no_cookie)",
+                        player.uniqueId,
+                    )
+                    player.disconnect(
+                        Component.text("This transfer could not be verified. Please reconnect.")
+                    )
+                    return@async
+                }
                 if (bytes.size > MAX_HANDOFF_COOKIE_BYTES) {
                     player.disconnect(
                         Component.text("This transfer could not be verified. Please reconnect.")
