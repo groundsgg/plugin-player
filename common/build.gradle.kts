@@ -21,8 +21,8 @@ dependencies {
     // compileOnly: Minestom, Paper and Velocity each ship their own Adventure, Gson and SLF4J, and
     // a shaded copy of Adventure is a second Component type the host rejects. Compiled against
     // Paper's Adventure 4; the tests run it on Minestom's 5, which is what the lobby and games use.
-    compileOnly("net.kyori:adventure-api:4.26.1")
-    compileOnly("net.kyori:adventure-text-serializer-plain:4.26.1")
+    compileOnly("net.kyori:adventure-api:5.2.0")
+    compileOnly("net.kyori:adventure-text-serializer-plain:5.2.0")
     compileOnly("com.google.code.gson:gson:2.13.2")
     compileOnly("org.slf4j:slf4j-api:2.0.17")
 
