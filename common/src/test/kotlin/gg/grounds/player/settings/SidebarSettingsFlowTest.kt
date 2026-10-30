@@ -6,8 +6,10 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import net.kyori.adventure.audience.Audience
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
@@ -68,6 +70,7 @@ class SidebarSettingsFlowTest {
     private class Backend : AutoCloseable {
         @Volatile var enabled = false
         @Volatile var fail = false
+        var beforePut: () -> Unit = {}
         val writes = LinkedBlockingQueue<Boolean>()
         val server =
             HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
@@ -86,6 +89,7 @@ class SidebarSettingsFlowTest {
                                             .get("enabled")
                                             .asBoolean
                                     writes.add(value)
+                                    beforePut()
                                     if (fail) status = 500 else enabled = value
                                 }
                                 "{\"enabled\":$enabled}"
@@ -170,6 +174,45 @@ class SidebarSettingsFlowTest {
                     "Failed ON must have rolled back to OFF",
                 )
                 assertEquals(true, platform.visibility.poll(5, TimeUnit.SECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun `two failed queued clicks restore the last committed value`() {
+        Backend().use { backend ->
+            backend.enabled = true
+            backend.fail = true
+            val release = CountDownLatch(1)
+            val first = AtomicBoolean(true)
+            backend.beforePut = {
+                if (first.getAndSet(false)) check(release.await(4, TimeUnit.SECONDS))
+            }
+            val platform = Platform()
+            val player = TestPlayer()
+            menu(platform, backend).use { menu ->
+                menu.open(player, SettingsMenu.Tab.GAMEPLAY)
+                menu.onClick(player, sidebarClick(platform.dialog()))
+                val off = platform.dialog()
+                assertEquals(false, backend.writes.poll(5, TimeUnit.SECONDS))
+                menu.onClick(player, sidebarClick(off))
+                platform.dialog()
+                release.countDown()
+                assertEquals(true, backend.writes.poll(5, TimeUnit.SECONDS))
+                var restored: SettingsDialog? = null
+                repeat(2) {
+                    assertNotNull(player.errors.poll(5, TimeUnit.SECONDS))
+                    restored = platform.dialog()
+                }
+                assertTrue(platform.visibility.isEmpty())
+                backend.fail = false
+                menu.onClick(player, sidebarClick(checkNotNull(restored)))
+                assertEquals(
+                    false,
+                    backend.writes.poll(5, TimeUnit.SECONDS),
+                    "Both saves failed: stored ON must toggle OFF",
+                )
+                assertEquals(false, platform.visibility.poll(5, TimeUnit.SECONDS))
             }
         }
     }

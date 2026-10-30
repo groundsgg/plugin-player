@@ -75,9 +75,10 @@ class SettingsMenu<P : Audience>(
         /** The player's voice when the menu opened; null when this server has no voice chat. */
         val voiceStatus: VoiceStatus? = null,
         var mentionSounds: Boolean = true,
-        var sidebar: Boolean = true,
+        @Volatile var sidebar: Boolean = true,
     ) {
-        var sidebarRevision: Long = 0
+        @Volatile var sidebarRevision: Long = 0
+        @Volatile var confirmedSidebar: Boolean = sidebar
     }
 
     /**
@@ -254,12 +255,13 @@ class SettingsMenu<P : Audience>(
                     state,
                     {
                         client.setSidebarEnabled(id, enabled)
+                        state.confirmedSidebar = enabled
                         // The backend owns the concrete player; service invalidation also reaches
                         // a replacement connection if this write finishes after a server move.
                         runCatching { onSidebarSaved(player, enabled) }
                     },
                 ) {
-                    if (state.sidebarRevision == revision) state.sidebar = before
+                    if (state.sidebarRevision == revision) state.sidebar = state.confirmedSidebar
                 }
             }
             MENTION_SOUNDS -> {
