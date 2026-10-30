@@ -42,6 +42,7 @@ class SettingsMenu<P : Audience>(
     private val onLanguageSaved: (P, String?) -> Unit = { _, _ -> },
     /** This server's voice chat, or null when it has none. Read per use: modules install late. */
     private val voiceChat: () -> VoiceSettings? = { null },
+    private val onSidebarSaved: (P, Boolean) -> Unit = { _, _ -> },
 ) : AutoCloseable {
     private val logger = LoggerFactory.getLogger(SettingsMenu::class.java)
 
@@ -74,7 +75,10 @@ class SettingsMenu<P : Audience>(
         /** The player's voice when the menu opened; null when this server has no voice chat. */
         val voiceStatus: VoiceStatus? = null,
         var mentionSounds: Boolean = true,
-    )
+        var sidebar: Boolean = true,
+    ) {
+        var sidebarRevision: Long = 0
+    }
 
     /**
      * The tabs down the left. [GENERAL], [REGION], [SOCIAL] and the chat tab's global chat and
@@ -95,7 +99,7 @@ class SettingsMenu<P : Audience>(
         ),
         GAMEPLAY(
             SettingsMessage.SETTINGS_TAB_GAMEPLAY,
-            listOf(Preview.SIDEBAR, Preview.PARTICLES, Preview.AUTO_REQUEUE),
+            listOf(Preview.PARTICLES, Preview.AUTO_REQUEUE),
         );
 
         internal val key: Key =
@@ -123,7 +127,6 @@ class SettingsMenu<P : Audience>(
             SettingsMessage.SETTINGS_MATCH_SOUND,
             SettingsMessage.SETTINGS_MATCH_SOUND_HINT,
         ),
-        SIDEBAR(SettingsMessage.SETTINGS_SIDEBAR, SettingsMessage.SETTINGS_SIDEBAR_HINT),
         PARTICLES(SettingsMessage.SETTINGS_PARTICLES, SettingsMessage.SETTINGS_PARTICLES_HINT),
         AUTO_REQUEUE(
             SettingsMessage.SETTINGS_AUTO_REQUEUE,
@@ -146,6 +149,7 @@ class SettingsMenu<P : Audience>(
                         live = liveRegions().map { it.lowercase() }.toSet(),
                         globalChat = client.globalChatEnabled(id),
                         mentionSounds = client.mentionSoundsEnabled(id),
+                        sidebar = client.sidebarEnabled(id),
                         voice = client.voicePreferences(id),
                         voiceStatus = voiceChat()?.status(id),
                     )
@@ -238,6 +242,24 @@ class SettingsMenu<P : Audience>(
                     },
                 ) {
                     state.globalChat = !enabled
+                }
+            }
+            SIDEBAR -> {
+                val before = state.sidebar
+                val enabled = !before
+                val revision = ++state.sidebarRevision
+                state.sidebar = enabled
+                save(
+                    player,
+                    state,
+                    {
+                        client.setSidebarEnabled(id, enabled)
+                        // The backend owns the concrete player; service invalidation also reaches
+                        // a replacement connection if this write finishes after a server move.
+                        runCatching { onSidebarSaved(player, enabled) }
+                    },
+                ) {
+                    if (state.sidebarRevision == revision) state.sidebar = before
                 }
             }
             MENTION_SOUNDS -> {
@@ -382,6 +404,7 @@ class SettingsMenu<P : Audience>(
             Key.key(ClickTokens.NAMESPACE, "menu/settings/friend-requests")
         private val PRIVATE_MESSAGES: Key =
             Key.key(ClickTokens.NAMESPACE, "menu/settings/private-messages")
+        private val SIDEBAR: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/sidebar")
         private val MENTION_SOUNDS: Key =
             Key.key(ClickTokens.NAMESPACE, "menu/settings/mention-sounds")
         private val GLOBAL_CHAT: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/global-chat")
@@ -487,6 +510,18 @@ class SettingsMenu<P : Audience>(
                         action = MENTION_SOUNDS,
                     )
                     previews(c, state, text, first = 5)
+                }
+                Tab.GAMEPLAY -> {
+                    toggleRow(
+                        c,
+                        y = ROW_Y,
+                        title = text(SettingsMessage.SETTINGS_SIDEBAR),
+                        description = text(SettingsMessage.SETTINGS_SIDEBAR_HINT),
+                        text = text,
+                        on = state.sidebar,
+                        action = SIDEBAR,
+                    )
+                    previews(c, state, text, first = 1)
                 }
                 else -> previews(c, state, text, first = 0)
             }
