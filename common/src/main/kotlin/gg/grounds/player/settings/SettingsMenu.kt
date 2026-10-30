@@ -72,6 +72,7 @@ class SettingsMenu<P : Audience>(
         var voice: VoicePreferences = VoicePreferences(partyVoice = true, hints = true),
         /** The player's voice when the menu opened; null when this server has no voice chat. */
         val voiceStatus: VoiceStatus? = null,
+        var mentionSounds: Boolean = true,
     )
 
     /**
@@ -86,7 +87,7 @@ class SettingsMenu<P : Audience>(
         /** The world map ([RegionTab]); `/region` opens the menu here. */
         REGION(SettingsMessage.REGION_MENU_TITLE),
         SOCIAL(SettingsMessage.SETTINGS_SOCIAL),
-        CHAT(SettingsMessage.SETTINGS_TAB_CHAT, listOf(Preview.MENTION_SOUND, Preview.CHAT_FILTER)),
+        CHAT(SettingsMessage.SETTINGS_TAB_CHAT, listOf(Preview.CHAT_FILTER)),
         ALERTS(
             SettingsMessage.SETTINGS_TAB_ALERTS,
             listOf(Preview.FRIEND_ALERTS, Preview.PARTY_INVITES, Preview.MATCH_SOUND),
@@ -105,10 +106,6 @@ class SettingsMenu<P : Audience>(
      * says so in its tooltip, but nothing stores or applies it.
      */
     internal enum class Preview(val title: SettingsMessage, val hint: SettingsMessage) {
-        MENTION_SOUND(
-            SettingsMessage.SETTINGS_MENTION_SOUND,
-            SettingsMessage.SETTINGS_MENTION_SOUND_HINT,
-        ),
         CHAT_FILTER(
             SettingsMessage.SETTINGS_CHAT_FILTER,
             SettingsMessage.SETTINGS_CHAT_FILTER_HINT,
@@ -147,6 +144,7 @@ class SettingsMenu<P : Audience>(
                         tab = tab,
                         live = liveRegions().map { it.lowercase() }.toSet(),
                         globalChat = client.globalChatEnabled(id),
+                        mentionSounds = client.mentionSoundsEnabled(id),
                         voice = client.voicePreferences(id),
                         voiceStatus = voiceChat()?.status(id),
                     )
@@ -236,6 +234,20 @@ class SettingsMenu<P : Audience>(
                     },
                 ) {
                     state.globalChat = !enabled
+                }
+            }
+            MENTION_SOUNDS -> {
+                val enabled = !state.mentionSounds
+                state.mentionSounds = enabled
+                save(
+                    player,
+                    state,
+                    {
+                        client.setMentionSoundsEnabled(id, enabled)
+                        platform.sendPluginMessage(player, CHAT_SETTINGS_CHANNEL, ByteArray(0))
+                    },
+                ) {
+                    state.mentionSounds = !enabled
                 }
             }
             PARTY_VOICE,
@@ -364,6 +376,8 @@ class SettingsMenu<P : Audience>(
             Key.key(ClickTokens.NAMESPACE, "menu/settings/friend-requests")
         private val PRIVATE_MESSAGES: Key =
             Key.key(ClickTokens.NAMESPACE, "menu/settings/private-messages")
+        private val MENTION_SOUNDS: Key =
+            Key.key(ClickTokens.NAMESPACE, "menu/settings/mention-sounds")
         private val GLOBAL_CHAT: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/global-chat")
         private val PARTY_VOICE: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/party-voice")
         private val VOICE_HINTS: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/voice-hints")
@@ -457,7 +471,16 @@ class SettingsMenu<P : Audience>(
                         value = voiceName(state.voiceStatus, text),
                         description = text(SettingsMessage.SETTINGS_VOICE_HINT),
                     )
-                    previews(c, state, text, first = 4)
+                    toggleRow(
+                        c,
+                        y = ROW_Y + 4 * ROW_PITCH,
+                        title = text(SettingsMessage.SETTINGS_MENTION_SOUND),
+                        description = text(SettingsMessage.SETTINGS_MENTION_SOUND_HINT),
+                        text = text,
+                        on = state.mentionSounds,
+                        action = MENTION_SOUNDS,
+                    )
+                    previews(c, state, text, first = 5)
                 }
                 else -> previews(c, state, text, first = 0)
             }
