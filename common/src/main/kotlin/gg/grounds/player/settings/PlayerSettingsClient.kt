@@ -67,6 +67,13 @@ class PlayerSettingsClient(
         )
     }
 
+    fun sidebarEnabled(player: UUID): Boolean =
+        send(get("$playerServiceUrl/v1/players/$player/sidebar")).get("enabled").asBoolean
+
+    fun setSidebarEnabled(player: UUID, enabled: Boolean) {
+        send(put("$playerServiceUrl/v1/players/$player/sidebar", enabled(enabled)))
+    }
+
     fun friendRequestsEnabled(player: UUID): Boolean =
         send(get(socialSettingsUrl(player, "friend-requests"))).get("enabled").asBoolean
 
