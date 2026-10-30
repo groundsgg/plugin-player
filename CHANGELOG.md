@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1](https://github.com/groundsgg/plugin-player/compare/v1.7.0...v1.7.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **handoff:** refuse a transfer without a handoff cookie cleanly ([#59](https://github.com/groundsgg/plugin-player/issues/59)) ([6e376aa](https://github.com/groundsgg/plugin-player/commit/6e376aa5408878ad9f33afdde6564f7498efcee5))
+* **settings:** South America and Africa can be picked ([#68](https://github.com/groundsgg/plugin-player/issues/68)) ([52e1483](https://github.com/groundsgg/plugin-player/commit/52e148340713b4a0a2d351d1c4713000b7406794))
+
 ## [1.7.0](https://github.com/groundsgg/plugin-player/compare/v1.6.1...v1.7.0) (2026-10-25)
 
 
