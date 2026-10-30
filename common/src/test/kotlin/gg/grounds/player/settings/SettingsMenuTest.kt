@@ -92,7 +92,8 @@ class SettingsMenuTest {
         val labels = canvas.elements.filterIsInstance<Element.Label>().map { it.text }
         assertTrue(english(SettingsMessage.SETTINGS_GLOBAL_CHAT) in labels)
         // its row is first, the previews below
-        assertEquals(2, SettingsMenu.Tab.CHAT.previews.size)
+        assertEquals(1, SettingsMenu.Tab.CHAT.previews.size)
+        assertTrue(hits.any { it.action?.value() == "menu/settings/mention-sounds" })
     }
 
     /** A row's label and its value share one strip; in no language may they run into each other. */
