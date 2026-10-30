@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/groundsgg/plugin-player/compare/v1.8.0...v1.9.0) (2026-10-30)
+
+
+### Features
+
+* make the Settings scoreboard switch persistent and functional ([#72](https://github.com/groundsgg/plugin-player/issues/72)) ([94fd019](https://github.com/groundsgg/plugin-player/commit/94fd0196753a28ac1d53039f78543735614d386f))
+
 ## [1.8.0](https://github.com/groundsgg/plugin-player/compare/v1.7.1...v1.8.0) (2026-10-30)
 
 
