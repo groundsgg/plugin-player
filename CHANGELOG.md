@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/groundsgg/plugin-player/compare/v1.7.1...v1.8.0) (2026-10-30)
+
+
+### Features
+
+* **settings:** persist and apply the mention sound toggle ([#69](https://github.com/groundsgg/plugin-player/issues/69)) ([c4019be](https://github.com/groundsgg/plugin-player/commit/c4019be8b98a8bda9a7e6c8973842fd60c437535))
+* **settings:** play click feedback for menu selections ([#71](https://github.com/groundsgg/plugin-player/issues/71)) ([527f9f6](https://github.com/groundsgg/plugin-player/commit/527f9f69ff8641dec683b99c67072e088a031a8d))
+
 ## [1.7.1](https://github.com/groundsgg/plugin-player/compare/v1.7.0...v1.7.1) (2026-10-30)
 
 
