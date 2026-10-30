@@ -13,7 +13,7 @@ repositories {
 dependencies {
     // service-player is reached over HTTP now: the JDK's own client, and Jackson for the bodies —
     // the same pair ForgeLinkClient already uses, so nothing new lands in the shaded jar.
-    implementation("tools.jackson.core:jackson-databind:3.2.3")
+    implementation("tools.jackson.core:jackson-databind:3.2.4")
 
     // The settings menu. Its text goes through library-i18n; api, as SettingsMenu.messages returns
     // it.
