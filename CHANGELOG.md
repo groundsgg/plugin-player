@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.1 (2026-10-30)
+
+- Reissue the unchanged scoreboard settings implementation after an incomplete 1.9.0 registry upload.
+
 ## [1.9.0](https://github.com/groundsgg/plugin-player/compare/v1.8.0...v1.9.0) (2026-10-30)
 
 
