@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import net.kyori.adventure.audience.Audience
 import net.kyori.adventure.key.Key
+import net.kyori.adventure.sound.Sound
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
@@ -177,6 +178,9 @@ class SettingsMenu<P : Audience>(
         // a stale (double click, outdated dialog), foreign or forged token resolves to nothing
         val action = tokens.consume(id, key) ?: return true
         val state = states[id] ?: return true
+        // Body links have no native button sound. Feedback belongs to accepted clicks only;
+        // the vanilla Done button already plays its own sound on the client.
+        runCatching { player.playSound(CLICK_SOUND) }
         when (action) {
             LANGUAGE_PREVIOUS,
             LANGUAGE_NEXT -> {
@@ -359,6 +363,8 @@ class SettingsMenu<P : Audience>(
                 PlainTextComponentSerializer.plainText().serialize(messages.render(key, locale))
             }
 
+        private val CLICK_SOUND =
+            Sound.sound(Key.key("minecraft:ui.button.click"), Sound.Source.MASTER, 1.0f, 1.0f)
         private val CLOSE: Key = Key.key(ClickTokens.NAMESPACE, "menu/close")
 
         /**
