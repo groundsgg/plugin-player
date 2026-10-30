@@ -528,7 +528,8 @@ internal object MenuPack {
             }
         val legacy = MenuArt.legacyRegion
         val continents = WorldMap.Continent.entries
-        val pickable = continents.filter { it.pickable }
+        // as that version shipped them: its pickable set, not today's
+        val pickable = WorldMap.Continent.FIRST_PICKS
         return listOf<Pair<MenuSprite, (Graphics2D, Int, Int) -> Unit>>(
             legacy[0] to ::window,
             legacy[1] to ::sea,
@@ -553,7 +554,7 @@ internal object MenuPack {
             val (face, edge) =
                 when {
                     picked -> PICKED to PICKED_EDGE
-                    continent.pickable -> LAND to LAND_EDGE
+                    continent in WorldMap.Continent.FIRST_PICKS -> LAND to LAND_EDGE
                     else -> IDLE to IDLE_EDGE
                 }
             val mine = { x: Int, y: Int ->

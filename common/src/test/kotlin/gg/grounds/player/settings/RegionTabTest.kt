@@ -62,29 +62,45 @@ class RegionTabTest {
     }
 
     @Test
-    fun `only continents with a geo address can be picked`() {
+    fun `every continent with a datacentre can be picked`() {
         assertEquals(
-            setOf("na", "eu", "as", "oc"),
-            Continent.entries.filter { it.pickable }.map { it.code }.toSet(),
+            Continent.entries.filter { it.zones.isNotEmpty() }.toSet(),
+            Continent.entries.filter { it.pickable }.toSet(),
+        )
+        assertEquals(
+            setOf("na", "sa", "eu", "af", "as", "oc"),
+            RegionTab.PICKS.values.map { it.code }.toSet(),
         )
         assertEquals(33, WorldMap.ZONES.size)
         assertEquals(WorldMap.ZONES.size, WorldMap.ZONES.map { it.code }.distinct().size)
     }
 
     @Test
-    fun `clicking a continent picks it, a continent without servers only explains`() {
+    fun `clicking a continent picks it, South America and Africa too`() {
         val clickAt = { lat: Double, lon: Double ->
             at(lat, lon).let { (x, y) -> ClientSim.clickAt(canvas, x, y) }
         }
         assertEquals(RegionTab.pick(Continent.EUROPE), clickAt(48.0, 10.0))
         assertEquals(RegionTab.pick(Continent.NORTH_AMERICA), clickAt(40.0, -100.0))
         assertEquals(RegionTab.pick(Continent.OCEANIA), clickAt(-25.0, 135.0))
+        assertEquals(RegionTab.pick(Continent.SOUTH_AMERICA), clickAt(-10.0, -55.0))
+        assertEquals(RegionTab.pick(Continent.AFRICA), clickAt(5.0, 20.0))
+    }
 
-        val (bx, by) = at(-10.0, -55.0)
-        assertNull(ClientSim.clickAt(canvas, bx, by))
-        val tip =
-            PlainTextComponentSerializer.plainText().serialize(ClientSim.hoverAt(canvas, bx, by)!!)
-        assertTrue("No servers on this continent yet" in tip, tip)
+    /**
+     * The shipped pack numbers its glyphs in declaration order. Every sprite it already has keeps
+     * its index; the picked South America and Africa come after all of them.
+     */
+    @Test
+    fun `newly pickable continents append glyphs instead of moving the shipped ones`() {
+        val picked = MenuArt.landsPicked
+        val first = WorldMap.Continent.FIRST_PICKS.map { picked.getValue(it).index }
+        val later =
+            listOf(Continent.SOUTH_AMERICA, Continent.AFRICA).map { picked.getValue(it).index }
+        val cards = MenuArt.cards.values.maxOf { it.index }
+        assertTrue(first.all { it < cards }, "first picks moved: $first")
+        assertEquals(listOf(cards + 1, cards + 2), later.sorted())
+        assertEquals(cards + 3, MenuArt.sprites.size)
     }
 
     @Test

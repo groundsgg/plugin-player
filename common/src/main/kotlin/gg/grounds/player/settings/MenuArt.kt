@@ -107,15 +107,11 @@ internal object MenuArt {
             WorldMap.bounds(continent).let { sprite("map2_${continent.code}", it.w, it.h) }
         }
 
-    /** The same land, highlighted, for the continent a player picked. Only pickable ones. */
+    /** The same land, highlighted, for a picked continent; for lobbies of that time only. */
     val continentsPicked =
-        WorldMap.Continent.entries
-            .filter { it.pickable }
-            .associateWith { continent ->
-                WorldMap.bounds(continent).let {
-                    sprite("map2_${continent.code}_picked", it.w, it.h)
-                }
-            }
+        WorldMap.Continent.FIRST_PICKS.associateWith { continent ->
+            WorldMap.bounds(continent).let { sprite("map2_${continent.code}_picked", it.w, it.h) }
+        }
 
     // ---- tabbed settings, after the /region map so its glyphs keep their indices: a tab rail on
     // the left, the open tab's panel right of it ----
@@ -164,15 +160,11 @@ internal object MenuArt {
             WorldMap.bounds(continent).let { sprite("map3_${continent.code}", it.w, it.h) }
         }
 
-    /** The picked continent in gold with a 1 px white outline, so one px larger on every side. */
-    val landsPicked =
-        WorldMap.Continent.entries
-            .filter { it.pickable }
-            .associateWith { continent ->
-                WorldMap.bounds(continent).let {
-                    sprite("map3_${continent.code}_picked", it.w + 2, it.h + 2)
-                }
-            }
+    /**
+     * The picked continent in gold with a 1 px white outline, so one px larger on every side: the
+     * first pickable ones here, the rest in [landsPickedLater] at the end, so no glyph moves.
+     */
+    private val landsPickedFirst = WorldMap.Continent.FIRST_PICKS.associateWith(::pickedLand)
 
     /** The status row under the map: two lines of text beside an icon. */
     const val STATUS_H = 27
@@ -203,6 +195,22 @@ internal object MenuArt {
     val cards =
         WorldMap.Continent.entries.associateWith { continent ->
             WorldMap.cardSize(continent).let { (w, h) -> sprite("card_${continent.code}", w, h) }
+        }
+
+    // ---- appended after the region tab shipped: new glyphs go here, never above ----
+
+    /** South America and Africa, pickable since Vultr has datacentres there. */
+    private val landsPickedLater =
+        WorldMap.Continent.entries
+            .filter { it.pickable && it !in WorldMap.Continent.FIRST_PICKS }
+            .associateWith(::pickedLand)
+
+    /** Every pickable continent's highlighted land, for [RegionTab]. */
+    val landsPicked = landsPickedFirst + landsPickedLater
+
+    private fun pickedLand(continent: WorldMap.Continent) =
+        WorldMap.bounds(continent).let {
+            sprite("map3_${continent.code}_picked", it.w + 2, it.h + 2)
         }
 
     private fun sprite(name: String, width: Int, height: Int): MenuSprite {
