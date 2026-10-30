@@ -18,8 +18,7 @@ internal object WorldMap {
 
     /**
      * A continent as a region code (`<code>.geo.<domain>`, the same codes `/settings` stores). Only
-     * [pickable] ones can be picked; the rest are drawn, with their datacentres, but have no geo
-     * address to steer to yet.
+     * [pickable] ones can be picked; the rest are drawn, but have nowhere to play yet.
      */
     enum class Continent(
         val code: String,
@@ -29,16 +28,16 @@ internal object WorldMap {
         val labelLat: Double,
         val labelLon: Double,
         /**
-         * Fixed, not derived from [zones]: the menu pack draws a highlighted sprite per pickable
-         * continent, and its glyphs are numbered in order, so changing the set renumbers every
-         * sprite after them and breaks the shipped pack.
+         * Fixed, not derived from [zones], because each pickable continent needs a highlighted
+         * sprite in the menu pack. A continent made pickable gets its sprite appended at the end of
+         * [MenuArt] (see [FIRST_PICKS]), never in the middle: the glyphs are numbered in order.
          */
         val pickable: Boolean,
     ) {
         NORTH_AMERICA("na", 'n', SettingsMessage.SETTINGS_REGION_NA, 58.0, -102.0, true),
-        SOUTH_AMERICA("sa", 's', SettingsMessage.SETTINGS_REGION_SA, -14.0, -58.0, false),
+        SOUTH_AMERICA("sa", 's', SettingsMessage.SETTINGS_REGION_SA, -14.0, -58.0, true),
         EUROPE("eu", 'e', SettingsMessage.SETTINGS_REGION_EU, 52.0, 46.0, true),
-        AFRICA("af", 'f', SettingsMessage.SETTINGS_REGION_AF, 8.0, 20.0, false),
+        AFRICA("af", 'f', SettingsMessage.SETTINGS_REGION_AF, 8.0, 20.0, true),
         ASIA("as", 'a', SettingsMessage.SETTINGS_REGION_AS, 58.0, 100.0, true),
         OCEANIA("oc", 'o', SettingsMessage.SETTINGS_REGION_OC, -24.0, 134.0, true);
 
@@ -47,6 +46,12 @@ internal object WorldMap {
 
         companion object {
             fun of(code: String?): Continent? = entries.firstOrNull { it.code.equals(code, true) }
+
+            /**
+             * The continents pickable when the pack was first shipped (UpCloud zones). Their
+             * highlighted sprites keep their place in [MenuArt]; later ones are appended.
+             */
+            val FIRST_PICKS = listOf(NORTH_AMERICA, EUROPE, ASIA, OCEANIA)
         }
     }
 

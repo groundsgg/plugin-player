@@ -34,14 +34,18 @@ class SettingsMenuTest {
                 SettingsMenu.Tab.entries
                     .filter { it != SettingsMenu.Tab.GENERAL }
                     .flatMap { tab ->
-                        listOf(true, false).map { on ->
-                            val state =
-                                SettingsMenu.State(0, null, on, !on).apply {
-                                    this.tab = tab
-                                    globalChat = !on
-                                    previews.replaceAll { _, _ -> on }
-                                }
-                            SettingsMenu.layout(state, text)
+                        listOf(true, false).flatMap { on ->
+                            VOICE_STATES.map { status ->
+                                val state =
+                                    SettingsMenu.State(0, null, on, !on, voiceStatus = status)
+                                        .apply {
+                                            this.tab = tab
+                                            globalChat = !on
+                                            voice = VoicePreferences(on, !on)
+                                            previews.replaceAll { _, _ -> on }
+                                        }
+                                SettingsMenu.layout(state, text)
+                            }
                         }
                     }
         }
@@ -88,7 +92,8 @@ class SettingsMenuTest {
         val labels = canvas.elements.filterIsInstance<Element.Label>().map { it.text }
         assertTrue(english(SettingsMessage.SETTINGS_GLOBAL_CHAT) in labels)
         // its row is first, the previews below
-        assertEquals(2, SettingsMenu.Tab.CHAT.previews.size)
+        assertEquals(1, SettingsMenu.Tab.CHAT.previews.size)
+        assertTrue(hits.any { it.action?.value() == "menu/settings/mention-sounds" })
     }
 
     /** A row's label and its value share one strip; in no language may they run into each other. */
@@ -153,9 +158,40 @@ class SettingsMenuTest {
     }
 
     @Test
+    fun `the chat and voice tab stores party voice and voice hints, then shows the voice`() {
+        val state = SettingsMenu.State(0, null, true, true).apply { tab = SettingsMenu.Tab.CHAT }
+        val canvas = SettingsMenu.layout(state, english)
+        val actions =
+            canvas.elements.filterIsInstance<Element.Hit>().mapNotNull { it.action?.value() }
+        assertTrue("menu/settings/party-voice" in actions)
+        assertTrue("menu/settings/voice-hints" in actions)
+        val labels = canvas.elements.filterIsInstance<Element.Label>().map { it.text }
+        assertTrue(english(SettingsMessage.SETTINGS_VOICE) in labels)
+        assertEquals("Chat & Voice", english(SettingsMenu.Tab.CHAT.label))
+    }
+
+    @Test
+    fun `the voice row says where the voice is, or why there is none`() {
+        assertEquals("Not on this server", SettingsMenu.voiceName(null, english))
+        assertEquals("No mod connected", SettingsMenu.voiceName(VoiceStatus(false, null), english))
+        assertEquals("Nearby", SettingsMenu.voiceName(VoiceStatus(true, null), english))
+        assertEquals("Team Red", SettingsMenu.voiceName(VoiceStatus(true, "Team Red"), english))
+    }
+
+    @Test
     fun `a region shows by name, an unknown one as its code`() {
         assertEquals("Nearest", SettingsMenu.regionName(null, english))
         assertEquals("Europe", SettingsMenu.regionName("eu", english))
         assertEquals("XX", SettingsMenu.regionName("xx", english))
+    }
+
+    private companion object {
+        val VOICE_STATES =
+            listOf(
+                null,
+                VoiceStatus(connected = false, group = null),
+                VoiceStatus(connected = true, group = null),
+                VoiceStatus(connected = true, group = "Team Red"),
+            )
     }
 }

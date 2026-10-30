@@ -6,6 +6,7 @@ import gg.grounds.player.settings.SettingsDialog
 import gg.grounds.player.settings.SettingsHooks
 import gg.grounds.player.settings.SettingsMenu
 import gg.grounds.player.settings.SettingsPlatform
+import gg.grounds.player.settings.VoiceSettings
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.ServerType
@@ -20,6 +21,8 @@ import net.minestom.server.dialog.DialogAfterAction
 import net.minestom.server.dialog.DialogBody
 import net.minestom.server.dialog.DialogMetadata
 import net.minestom.server.entity.Player
+import net.minestom.server.event.Event
+import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.PlayerCustomClickEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.tag.Tag
@@ -35,6 +38,7 @@ class GroundsSettingsModule : GroundsModule {
     override val id: String = MODULE_ID
 
     private var menu: SettingsMenu<Player>? = null
+    private var node: EventNode<Event>? = null
     private val commands = mutableListOf<Command>()
 
     override fun install(ctx: GroundsServerContext) {
@@ -48,11 +52,15 @@ class GroundsSettingsModule : GroundsModule {
                 SettingsMenu.messages { (it as? Player)?.getTag(CHAT_FONT_READY) == true },
                 liveRegions = { hooks()?.liveRegions().orEmpty() },
                 onLanguageSaved = { player, tag -> hooks()?.languageSaved(player.uuid, tag) },
+                voiceChat = { ctx.services.get<VoiceSettings>() },
             )
         this.menu = menu
         val node = ctx.eventNode("grounds-settings")
         node.addListener(PlayerCustomClickEvent::class.java) { menu.onClick(it.player, it.key) }
         node.addListener(PlayerDisconnectEvent::class.java) { menu.forget(it.player.uuid) }
+        // ctx.eventNode only creates the node; nothing fires until it hangs off the global handler.
+        MinecraftServer.getGlobalEventHandler().addChild(node)
+        this.node = node
         register("settings") { menu.open(it) }
         if (ctx.serverType == ServerType.LOBBY) {
             register("region") { menu.open(it, SettingsMenu.Tab.REGION) }
@@ -62,6 +70,8 @@ class GroundsSettingsModule : GroundsModule {
     override fun stop() {
         commands.forEach(MinecraftServer.getCommandManager()::unregister)
         commands.clear()
+        node?.let(MinecraftServer.getGlobalEventHandler()::removeChild)
+        node = null
         menu?.close()
         menu = null
     }

@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.8.0](https://github.com/groundsgg/plugin-player/compare/v1.7.1...v1.8.0) (2026-10-30)
+
+
+### Features
+
+* **settings:** persist and apply the mention sound toggle ([#69](https://github.com/groundsgg/plugin-player/issues/69)) ([c4019be](https://github.com/groundsgg/plugin-player/commit/c4019be8b98a8bda9a7e6c8973842fd60c437535))
+* **settings:** play click feedback for menu selections ([#71](https://github.com/groundsgg/plugin-player/issues/71)) ([527f9f6](https://github.com/groundsgg/plugin-player/commit/527f9f69ff8641dec683b99c67072e088a031a8d))
+
+## [1.7.1](https://github.com/groundsgg/plugin-player/compare/v1.7.0...v1.7.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **handoff:** refuse a transfer without a handoff cookie cleanly ([#59](https://github.com/groundsgg/plugin-player/issues/59)) ([6e376aa](https://github.com/groundsgg/plugin-player/commit/6e376aa5408878ad9f33afdde6564f7498efcee5))
+* **settings:** South America and Africa can be picked ([#68](https://github.com/groundsgg/plugin-player/issues/68)) ([52e1483](https://github.com/groundsgg/plugin-player/commit/52e148340713b4a0a2d351d1c4713000b7406794))
+
+## [1.7.0](https://github.com/groundsgg/plugin-player/compare/v1.6.1...v1.7.0) (2026-10-25)
+
+
+### Features
+
+* **settings:** Chat & Voice tab with voice settings ([#64](https://github.com/groundsgg/plugin-player/issues/64)) ([78557ca](https://github.com/groundsgg/plugin-player/commit/78557ca0724fa9e6354592ad8c37b6aef6f3ae00))
+
+## [1.6.1](https://github.com/groundsgg/plugin-player/compare/v1.6.0...v1.6.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **settings:** hang the module's listeners off the global handler ([#62](https://github.com/groundsgg/plugin-player/issues/62)) ([98907c7](https://github.com/groundsgg/plugin-player/commit/98907c7a4459e451816db0bbc398d79cdcb126c2))
+
+## [1.6.0](https://github.com/groundsgg/plugin-player/compare/v1.5.0...v1.6.0) (2026-10-25)
+
+
+### Features
+
+* **settings:** /settings on every server ([#60](https://github.com/groundsgg/plugin-player/issues/60)) ([9fd2238](https://github.com/groundsgg/plugin-player/commit/9fd2238eed9480f9cfd1c19c7621ba334ac31a50))
+
 ## [1.5.0](https://github.com/groundsgg/plugin-player/compare/v1.4.0...v1.5.0) (2026-10-17)
 
 

@@ -88,6 +88,30 @@ class PlayerSettingsClient(
         send(put(socialSettingsUrl(player, "global-chat"), enabled(enabled)))
     }
 
+    fun mentionSoundsEnabled(player: UUID): Boolean =
+        send(get(socialSettingsUrl(player, "mention-sounds"))).get("enabled").asBoolean
+
+    fun setMentionSoundsEnabled(player: UUID, enabled: Boolean) {
+        send(put(socialSettingsUrl(player, "mention-sounds"), enabled(enabled)))
+    }
+
+    fun voicePreferences(player: UUID): VoicePreferences =
+        send(get(socialSettingsUrl(player, "voice"))).let {
+            VoicePreferences(it.get("partyVoice").asBoolean, it.get("hints").asBoolean)
+        }
+
+    fun setVoicePreferences(player: UUID, preferences: VoicePreferences) {
+        send(
+            put(
+                socialSettingsUrl(player, "voice"),
+                JsonObject().apply {
+                    addProperty("partyVoice", preferences.partyVoice)
+                    addProperty("hints", preferences.hints)
+                },
+            )
+        )
+    }
+
     private fun socialSettingsUrl(player: UUID, setting: String) =
         "$socialServiceUrl/v1/social/players/$player/$setting/settings"
 

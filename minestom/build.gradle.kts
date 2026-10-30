@@ -41,6 +41,8 @@ dependencies {
     implementation("net.kyori:adventure-text-minimessage:5.2.0")
 
     testImplementation("net.minestom:minestom:2026.10.02-26.3-grounds.1")
+    // DefaultServiceRegistry, for a GroundsServerContext in tests.
+    testImplementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:6.1.3")
