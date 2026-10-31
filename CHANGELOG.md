@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/groundsgg/plugin-player/compare/v1.10.0...v1.10.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **settings:** apply saved language immediately across backends ([#77](https://github.com/groundsgg/plugin-player/issues/77)) ([5ccfb5b](https://github.com/groundsgg/plugin-player/commit/5ccfb5b62b0592a355be7c88dbca4eba54133d5c))
+
 ## [1.10.0](https://github.com/groundsgg/plugin-player/compare/v1.9.1...v1.10.0) (2026-10-31)
 
 
