@@ -178,6 +178,72 @@ class HttpPlayerPresenceClientTest {
     }
 
     @Test
+    fun `reserved consume carries the runtime connection binding`() {
+        routes["/v2/players/sessions/transfer"] =
+            201 to
+                """{"playerId":"$PLAYER_ID","sessionId":"$DESTINATION_SESSION_ID","leaseExpiresAt":"2026-08-04T10:01:00Z"}"""
+        client.consumeHandoff(
+            PLAYER_ID,
+            DESTINATION_SESSION_ID,
+            "token",
+            "Notch",
+            "target",
+            "eu",
+            DESTINATION_SESSION_ID,
+        )
+        assertTrue(
+            seen["/v2/players/sessions/transfer"]!!
+                .body
+                .contains("\"connectionId\":\"$DESTINATION_SESSION_ID\"")
+        )
+    }
+
+    @Test
+    fun `uncertain reserved consume fences its admission before exact cleanup`() {
+        routes["/v2/players/sessions/transfer"] = 503 to ""
+        routes["/v2/players/sessions/transfer/admission/abort"] = 204 to ""
+        routes["/v2/players/$PLAYER_ID/session"] = 204 to ""
+        client.consumeHandoff(
+            PLAYER_ID,
+            DESTINATION_SESSION_ID,
+            "opaque-token",
+            "Notch",
+            "target",
+            "eu",
+            DESTINATION_SESSION_ID,
+        )
+        val abort = seen["/v2/players/sessions/transfer/admission/abort"]!!
+        assertEquals("POST", abort.method)
+        assertTrue(abort.body.contains("\"connectionId\":\"$DESTINATION_SESSION_ID\""))
+        assertTrue(abort.body.contains("\"destinationProxyId\":\"target\""))
+        assertEquals(
+            "sessionId=$DESTINATION_SESSION_ID",
+            seen["/v2/players/$PLAYER_ID/session"]?.query,
+        )
+    }
+
+    @Test
+    fun `unknown transfer result cleans only its exact destination lease`() {
+        routes["/v2/players/sessions/transfer"] = 503 to ""
+        routes["/v2/players/$PLAYER_ID/session"] = 204 to ""
+        val result =
+            client.consumeHandoff(
+                PLAYER_ID,
+                DESTINATION_SESSION_ID,
+                "token",
+                "Notch",
+                "target",
+                "eu",
+            )
+        assertTrue(result is ExactPlayerLoginResult.Unavailable)
+        assertEquals("DELETE", seen["/v2/players/$PLAYER_ID/session"]?.method)
+        assertEquals(
+            "sessionId=$DESTINATION_SESSION_ID",
+            seen["/v2/players/$PLAYER_ID/session"]?.query,
+        )
+    }
+
+    @Test
     fun `409 is already-online, not an error`() {
         routes["/v1/players/sessions"] =
             409 to """{"title":"Player already online","status":409,"code":"already_online"}"""
