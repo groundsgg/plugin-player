@@ -102,6 +102,13 @@ class PlayerSettingsClient(
         send(put(socialSettingsUrl(player, "mention-sounds"), enabled(enabled)))
     }
 
+    fun alertEnabled(player: UUID, setting: String): Boolean =
+        send(get(socialSettingsUrl(player, setting))).get("enabled").asBoolean
+
+    fun setAlertEnabled(player: UUID, setting: String, value: Boolean) {
+        send(put(socialSettingsUrl(player, setting), enabled(value)))
+    }
+
     fun voicePreferences(player: UUID): VoicePreferences =
         send(get(socialSettingsUrl(player, "voice"))).let {
             VoicePreferences(it.get("partyVoice").asBoolean, it.get("hints").asBoolean)
