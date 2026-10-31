@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/groundsgg/plugin-player/compare/v1.9.1...v1.10.0) (2026-10-31)
+
+
+### Features
+
+* **settings:** enable persisted alerts and notification preferences ([#75](https://github.com/groundsgg/plugin-player/issues/75)) ([9cb4d9a](https://github.com/groundsgg/plugin-player/commit/9cb4d9a655f86f845049dd71c48ba3890993b3b4))
+
 ## 1.9.1 (2026-10-30)
 
 - Reissue the unchanged scoreboard settings implementation after an incomplete 1.9.0 registry upload.
