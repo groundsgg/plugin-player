@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.2](https://github.com/groundsgg/plugin-player/compare/v1.10.1...v1.10.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **velocity:** consume the verified runtime transfer admission ([#79](https://github.com/groundsgg/plugin-player/issues/79)) ([57dddc5](https://github.com/groundsgg/plugin-player/commit/57dddc52f5ed95121077a63110d76867f90f8451))
+
 ## [1.10.1](https://github.com/groundsgg/plugin-player/compare/v1.10.0...v1.10.1) (2026-10-31)
 
 
