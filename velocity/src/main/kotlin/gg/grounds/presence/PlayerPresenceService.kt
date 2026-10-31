@@ -28,6 +28,8 @@ class PlayerPresenceService : AutoCloseable {
     private var client: HttpPlayerPresenceClient? = null
     private val connections =
         Collections.synchronizedMap(IdentityHashMap<Player, ConnectionLease>())
+    private val outboundTransfers =
+        Collections.newSetFromMap(Collections.synchronizedMap(IdentityHashMap<Player, Boolean>()))
     private val mapper = JsonMapper.builder().build()
 
     data class ConnectionLease(
@@ -51,10 +53,17 @@ class PlayerPresenceService : AutoCloseable {
 
     fun issueHandoff(player: Player): SessionHandoff? {
         val lease = lease(player) ?: return null
-        return withClient(null) { it.issueHandoff(lease.playerId, lease.sessionId) }
+        return withClient(null) {
+            it.issueHandoff(lease.playerId, lease.sessionId, TransferAdmissionBridge.required)
+        }
     }
 
-    fun consumeHandoff(player: Player, token: String, sessionId: UUID): ExactPlayerLoginResult {
+    fun consumeHandoff(
+        player: Player,
+        token: String,
+        sessionId: UUID,
+        admissionConnectionId: UUID? = null,
+    ): ExactPlayerLoginResult {
         val result =
             withClient(ExactPlayerLoginResult.Unavailable("presence service is not configured")) {
                 it.consumeHandoff(
@@ -64,18 +73,25 @@ class PlayerPresenceService : AutoCloseable {
                     player.username,
                     proxyId(),
                     region(),
+                    admissionConnectionId,
                 )
             }
         if (result is ExactPlayerLoginResult.Accepted) {
-            connections[player] =
+            val lease =
                 ConnectionLease(player.uniqueId, sessionId, result.session.leaseExpiresAtMillis)
+            synchronized(connections) {
+                if (player.isActive) connections[player] = lease else logoutExact(lease)
+            }
         }
         return result
     }
 
     fun lease(player: Player): ConnectionLease? = connections[player]
 
-    fun remove(player: Player): ConnectionLease? = connections.remove(player)
+    fun remove(player: Player): ConnectionLease? {
+        outboundTransfers.remove(player)
+        return connections.remove(player)
+    }
 
     fun leasesFor(players: Collection<Player>): List<ConnectionLease> = players.mapNotNull(::lease)
 
@@ -113,15 +129,22 @@ class PlayerPresenceService : AutoCloseable {
 
     fun transferToHost(player: Player, host: String, port: Int): Boolean {
         val lease = lease(player) ?: return false
-        val handoff = issueHandoff(player) ?: return false
-        player.storeCookie(
-            HANDOFF_COOKIE,
-            mapper.writeValueAsBytes(
-                mapOf("playerId" to lease.playerId.toString(), "token" to handoff.token)
-            ),
-        )
-        player.transferToHost(InetSocketAddress.createUnresolved(host, port))
-        return true
+        if (!outboundTransfers.add(player)) return false
+        var sent = false
+        try {
+            val handoff = issueHandoff(player) ?: return false
+            player.storeCookie(
+                HANDOFF_COOKIE,
+                mapper.writeValueAsBytes(
+                    mapOf("playerId" to lease.playerId.toString(), "token" to handoff.token)
+                ),
+            )
+            player.transferToHost(InetSocketAddress.createUnresolved(host, port))
+            sent = true
+            return true
+        } finally {
+            if (!sent) outboundTransfers.remove(player)
+        }
     }
 
     fun configure(baseUrl: String) {

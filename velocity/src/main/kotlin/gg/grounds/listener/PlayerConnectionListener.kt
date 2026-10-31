@@ -15,6 +15,7 @@ import gg.grounds.config.MessagesConfig
 import gg.grounds.player.presence.ExactPlayerLoginResult
 import gg.grounds.player.presence.PlayerLogoutResult
 import gg.grounds.presence.PlayerPresenceService
+import gg.grounds.presence.TransferAdmissionBridge
 import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.concurrent.CompletableFuture
@@ -48,7 +49,18 @@ class PlayerConnectionListener(
             if (
                 player.handshakeIntent == com.velocitypowered.api.network.HandshakeIntent.TRANSFER
             ) {
-                // A transfer is admitted only after the destination consumes the cookie handoff.
+                if (
+                    TransferAdmissionBridge.required &&
+                        runCatching { TransferAdmissionBridge.admission(player) }.getOrNull() ==
+                            null
+                ) {
+                    deny(
+                        event,
+                        Component.text("This transfer could not be verified. Please reconnect."),
+                    )
+                    return@async
+                }
+                // Ownership still waits for the final authenticated profile and exact consume.
                 pendingTransfers.add(player)
                 return@async
             }
@@ -124,6 +136,25 @@ class PlayerConnectionListener(
         handoffCookies[player] = cookie
         return EventTask.async {
             try {
+                val admission = TransferAdmissionBridge.admission(player)
+                if (TransferAdmissionBridge.required && admission == null)
+                    throw IllegalStateException("transfer admission is missing")
+                if (admission != null) {
+                    val result =
+                        playerPresenceService.consumeHandoff(
+                            player,
+                            admission.token,
+                            admission.connectionId,
+                            admission.connectionId,
+                        )
+                    if (result is ExactPlayerLoginResult.Accepted)
+                        TransferAdmissionBridge.complete(player)
+                    if (result !is ExactPlayerLoginResult.Accepted)
+                        player.disconnect(
+                            Component.text("This transfer could not be verified. Please reconnect.")
+                        )
+                    return@async
+                }
                 player.requestCookie(HANDOFF_COOKIE)
                 // Null when the sending proxy stored no handoff: a bare transfer packet.
                 val bytes = cookie.get(COOKIE_TIMEOUT_SECONDS, TimeUnit.SECONDS)

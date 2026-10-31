@@ -196,8 +196,15 @@ class HttpPlayerPresenceClient(
         return response.statusCode() == 204
     }
 
-    fun issueHandoff(playerId: UUID, sessionId: UUID): SessionHandoff? {
-        val body = mapper.writeValueAsString(mapOf("sessionId" to sessionId.toString()))
+    fun issueHandoff(
+        playerId: UUID,
+        sessionId: UUID,
+        boundedAdmission: Boolean = false,
+    ): SessionHandoff? {
+        val body =
+            mapper.writeValueAsString(
+                mapOf("sessionId" to sessionId.toString(), "boundedAdmission" to boundedAdmission)
+            )
         val response =
             send(
                 request("/v2/players/$playerId/session/transfer")
@@ -211,6 +218,23 @@ class HttpPlayerPresenceClient(
         return SessionHandoff(token, parseInstantMillis(expiry))
     }
 
+    private fun abortHandoff(playerId: UUID, token: String, connectionId: UUID, proxyId: String) {
+        val body =
+            mapper.writeValueAsString(
+                mapOf(
+                    "playerId" to playerId.toString(),
+                    "handoffToken" to token,
+                    "connectionId" to connectionId.toString(),
+                    "destinationProxyId" to proxyId,
+                )
+            )
+        send(
+            request("/v2/players/sessions/transfer/admission/abort")
+                .header("Content-Type", APPLICATION_JSON)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+        )
+    }
+
     fun consumeHandoff(
         playerId: UUID,
         sessionId: UUID,
@@ -218,6 +242,7 @@ class HttpPlayerPresenceClient(
         playerName: String,
         proxyId: String,
         region: String,
+        admissionConnectionId: UUID? = null,
     ): ExactPlayerLoginResult {
         val body =
             mapper.writeValueAsString(
@@ -228,6 +253,7 @@ class HttpPlayerPresenceClient(
                     "playerName" to playerName,
                     "proxyId" to proxyId,
                     "region" to region,
+                    "connectionId" to admissionConnectionId?.toString(),
                 )
             )
         val response =
@@ -235,7 +261,15 @@ class HttpPlayerPresenceClient(
                 request("/v2/players/sessions/transfer")
                     .header("Content-Type", APPLICATION_JSON)
                     .POST(HttpRequest.BodyPublishers.ofString(body))
-            ) ?: return ExactPlayerLoginResult.Unavailable("presence service did not answer")
+            )
+        if (response == null || response.statusCode() in 500..599) {
+            if (admissionConnectionId != null)
+                abortHandoff(playerId, token, admissionConnectionId, proxyId)
+            logoutExactSession(playerId, sessionId)
+            return ExactPlayerLoginResult.Unavailable(
+                response?.let { problemDetail(it.body()) } ?: "presence service did not answer"
+            )
+        }
         return when (response.statusCode()) {
             201 -> {
                 val json = parse(response.body())
@@ -246,10 +280,14 @@ class HttpPlayerPresenceClient(
                     ExactPlayerLoginResult.Accepted(
                         AdmittedPlayerSession(sessionId, parseInstantMillis(expiry))
                     )
-                else
+                else {
+                    if (admissionConnectionId != null)
+                        abortHandoff(playerId, token, admissionConnectionId, proxyId)
+                    logoutExactSession(playerId, sessionId)
                     ExactPlayerLoginResult.Error(
                         "presence service returned an invalid transferred lease"
                     )
+                }
             }
             409 -> ExactPlayerLoginResult.AlreadyOnline
             in 500..599 -> ExactPlayerLoginResult.Unavailable(problemDetail(response.body()))
