@@ -53,7 +53,9 @@ class PlayerPresenceService : AutoCloseable {
 
     fun issueHandoff(player: Player): SessionHandoff? {
         val lease = lease(player) ?: return null
-        return withClient(null) { it.issueHandoff(lease.playerId, lease.sessionId) }
+        return withClient(null) {
+            it.issueHandoff(lease.playerId, lease.sessionId, TransferAdmissionBridge.required)
+        }
     }
 
     fun consumeHandoff(

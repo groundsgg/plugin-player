@@ -196,8 +196,15 @@ class HttpPlayerPresenceClient(
         return response.statusCode() == 204
     }
 
-    fun issueHandoff(playerId: UUID, sessionId: UUID): SessionHandoff? {
-        val body = mapper.writeValueAsString(mapOf("sessionId" to sessionId.toString()))
+    fun issueHandoff(
+        playerId: UUID,
+        sessionId: UUID,
+        boundedAdmission: Boolean = false,
+    ): SessionHandoff? {
+        val body =
+            mapper.writeValueAsString(
+                mapOf("sessionId" to sessionId.toString(), "boundedAdmission" to boundedAdmission)
+            )
         val response =
             send(
                 request("/v2/players/$playerId/session/transfer")
