@@ -1,7 +1,9 @@
 package gg.grounds.player.settings.minestom
 
+import gg.grounds.minigame.minestom.SidebarLocale
 import gg.grounds.minigame.minestom.SidebarVisibility
 import gg.grounds.modules.get
+import gg.grounds.player.settings.PlayerPreferenceController
 import gg.grounds.player.settings.PlayerSettingsClient
 import gg.grounds.player.settings.SettingsDialog
 import gg.grounds.player.settings.SettingsHooks
@@ -29,6 +31,7 @@ import net.minestom.server.event.EventNode
 import net.minestom.server.event.player.AsyncPlayerConfigurationEvent
 import net.minestom.server.event.player.PlayerCustomClickEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerSettingsChangeEvent
 import net.minestom.server.tag.Tag
 import net.minestom.server.timer.Task
 import net.minestom.server.timer.TaskSchedule
@@ -48,6 +51,7 @@ class GroundsSettingsModule : GroundsModule {
             Thread(it, "grounds-sidebar-settings").apply { isDaemon = true }
         }
     private var sidebar: SidebarPreferenceController<Player>? = null
+    private var languages: PlayerPreferenceController<Player, String?>? = null
     private var invalidations: SettingsInvalidationSubscription? = null
     private var reconcile: Task? = null
     private var menu: SettingsMenu<Player>? = null
@@ -68,8 +72,36 @@ class GroundsSettingsModule : GroundsModule {
                 execute = { if (!io.isShutdown) runCatching { io.execute(it) } },
             )
         this.sidebar = sidebar
-        val invalidations =
-            SettingsInvalidationSubscription.fromEnvironment(sidebar::refresh, sidebar::reconcile)
+        val languages =
+            PlayerPreferenceController<Player, String?>(
+                idOf = { it.uuid },
+                read = client::locale,
+                dispatch = { MinecraftServer.getSchedulerManager().scheduleNextTick(it) },
+                apply = { player, tag ->
+                    SidebarLocale.set(player, tag)
+                    try {
+                        hooks()?.languageSaved(player.uuid, tag)
+                    } catch (failure: Exception) {
+                        System.getLogger(GroundsSettingsModule::class.java.name)
+                            .log(
+                                System.Logger.Level.WARNING,
+                                "Stored language hook failed (player=${player.uuid})",
+                                failure,
+                            )
+                    }
+                },
+                execute = { if (!io.isShutdown) runCatching { io.execute(it) } },
+            )
+        this.languages = languages
+        val refresh: (UUID) -> Unit = { id ->
+            sidebar.refresh(id)
+            languages.refresh(id)
+        }
+        val reconcile = {
+            sidebar.reconcile()
+            languages.reconcile()
+        }
+        val invalidations = SettingsInvalidationSubscription.fromEnvironment(refresh, reconcile)
         this.invalidations = invalidations
         io.execute {
             runCatching { invalidations.start() }
@@ -77,14 +109,14 @@ class GroundsSettingsModule : GroundsModule {
                     System.getLogger(GroundsSettingsModule::class.java.name)
                         .log(
                             System.Logger.Level.WARNING,
-                            "Sidebar invalidations unavailable; periodic reconciliation remains active",
+                            "Settings invalidations unavailable; periodic reconciliation remains active",
                             it,
                         )
                 }
         }
-        reconcile =
+        this.reconcile =
             MinecraftServer.getSchedulerManager()
-                .buildTask(sidebar::reconcile)
+                .buildTask(reconcile)
                 .delay(TaskSchedule.seconds(60))
                 .repeat(TaskSchedule.seconds(60))
                 .schedule()
@@ -94,7 +126,7 @@ class GroundsSettingsModule : GroundsModule {
                 client,
                 SettingsMenu.messages { (it as? Player)?.getTag(CHAT_FONT_READY) == true },
                 liveRegions = { hooks()?.liveRegions().orEmpty() },
-                onLanguageSaved = { player, tag -> hooks()?.languageSaved(player.uuid, tag) },
+                onLanguageSaved = languages::savedAndRefresh,
                 voiceChat = { ctx.services.get<VoiceSettings>() },
                 onSidebarSaved = sidebar::saved,
             )
@@ -102,11 +134,26 @@ class GroundsSettingsModule : GroundsModule {
         val node = ctx.eventNode("grounds-settings")
         node.addListener(PlayerCustomClickEvent::class.java) { menu.onClick(it.player, it.key) }
         node.addListener(AsyncPlayerConfigurationEvent::class.java) {
-            sidebar.connect(it.player).run()
+            val visibilityRead = sidebar.connect(it.player)
+            val languageRead = languages.connect(it.player)
+            visibilityRead.run()
+            languageRead.run()
         }
         node.addListener(PlayerDisconnectEvent::class.java) {
             sidebar.disconnect(it.player)
+            languages.disconnect(it.player)
             menu.forget(it.player.uuid)
+        }
+        node.addListener(PlayerSettingsChangeEvent::class.java) { event ->
+            val player = event.player
+            player.scheduleNextTick {
+                if (
+                    this.languages === languages &&
+                        MinecraftServer.getConnectionManager()
+                            .getOnlinePlayerByUuid(player.uuid) === player
+                )
+                    SidebarLocale.refresh(player)
+            }
         }
         // ctx.eventNode only creates the node; nothing fires until it hangs off the global handler.
         MinecraftServer.getGlobalEventHandler().addChild(node)
@@ -122,6 +169,8 @@ class GroundsSettingsModule : GroundsModule {
         reconcile = null
         sidebar?.close()
         sidebar = null
+        languages?.close()
+        languages = null
         invalidations?.close()
         invalidations = null
         io.shutdownNow()

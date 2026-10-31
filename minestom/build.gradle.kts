@@ -31,7 +31,7 @@ repositories {
 
 dependencies {
     implementation(project(":common"))
-    implementation("gg.grounds:library-minigame-api-minestom:0.5.0")
+    implementation("gg.grounds:library-minigame-api-minestom:0.6.0")
     implementation("io.nats:jnats:2.26.4")
     testImplementation("org.testcontainers:testcontainers:1.21.4")
     api("gg.grounds:grounds-minestom-runtime-runtime-api:0.4.0")

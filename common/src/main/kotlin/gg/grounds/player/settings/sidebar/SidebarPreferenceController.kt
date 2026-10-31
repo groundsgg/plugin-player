@@ -1,111 +1,28 @@
 package gg.grounds.player.settings.sidebar
 
+import gg.grounds.player.settings.PlayerPreferenceController
 import java.util.UUID
 
-/** Connection ownership and read generations are separate from UI/application revisions. */
+/** Sidebar connections stay hidden until their stored visibility has loaded. */
 class SidebarPreferenceController<P : Any>(
-    private val idOf: (P) -> UUID,
-    private val read: (UUID) -> Boolean,
-    private val dispatch: (Runnable) -> Unit,
-    private val apply: (P, Boolean) -> Unit,
-    private val execute: (Runnable) -> Unit,
+    idOf: (P) -> UUID,
+    read: (UUID) -> Boolean,
+    dispatch: (Runnable) -> Unit,
+    apply: (P, Boolean) -> Unit,
+    execute: (Runnable) -> Unit,
 ) : AutoCloseable {
-    private class Ticket
+    private val preference =
+        PlayerPreferenceController(idOf, read, dispatch, apply, execute, initial = false)
 
-    private class Session<P>(val player: P) {
-        var ticket = Ticket()
-        var revision = 0L
-    }
+    fun connect(player: P): Runnable = preference.connect(player)
 
-    private val lock = Any()
-    private val sessions = HashMap<UUID, Session<P>>()
-    private var active = true
+    fun refresh(playerId: UUID) = preference.refresh(playerId)
 
-    /** Called during initial configuration before any frame exists; the returned read may block. */
-    fun connect(player: P): Runnable {
-        val id = idOf(player)
-        val session =
-            synchronized(lock) {
-                if (!active) return Runnable {}
-                sessions[id]
-                    ?.takeIf { it.player === player }
-                    ?.let {
-                        return request(id, it)
-                    }
-                Session(player).also { sessions[id] = it }
-            }
-        apply(player, false)
-        return synchronized(lock) { request(id, session) }
-    }
+    fun saved(player: P, enabled: Boolean) = preference.saved(player, enabled)
 
-    fun refresh(playerId: UUID) {
-        val request =
-            synchronized(lock) {
-                if (!active) return
-                sessions[playerId]?.let { request(playerId, it) }
-            }
-        request?.let(execute)
-    }
+    fun reconcile() = preference.reconcile()
 
-    private fun request(id: UUID, session: Session<P>): Runnable {
-        val ticket = Ticket().also { session.ticket = it }
-        return Runnable {
-            val allowed =
-                synchronized(lock) {
-                    active && sessions[id] === session && session.ticket === ticket
-                }
-            if (!allowed) return@Runnable
-            val value = runCatching { read(id) }.getOrNull() ?: return@Runnable
-            dispatch(
-                Runnable {
-                    synchronized(lock) {
-                        if (active && sessions[id] === session && session.ticket === ticket) {
-                            session.revision++
-                            apply(session.player, value)
-                        }
-                    }
-                }
-            )
-        }
-    }
+    fun disconnect(player: P) = preference.disconnect(player)
 
-    /** Apply only after HTTP committed; invalidate reads that started before that save. */
-    fun saved(player: P, enabled: Boolean) {
-        val id = idOf(player)
-        val (session, revision) =
-            synchronized(lock) {
-                if (!active) return
-                val session = sessions[id]?.takeIf { it.player === player } ?: return
-                session.ticket = Ticket()
-                session.revision++
-                session to session.revision
-            }
-        dispatch(
-            Runnable {
-                synchronized(lock) {
-                    if (active && sessions[id] === session && session.revision == revision)
-                        apply(player, enabled)
-                }
-            }
-        )
-    }
-
-    fun reconcile() {
-        val ids = synchronized(lock) { if (!active) return else sessions.keys.toList() }
-        ids.forEach(::refresh)
-    }
-
-    fun disconnect(player: P) {
-        synchronized(lock) {
-            val id = idOf(player)
-            if (sessions[id]?.player === player) sessions.remove(id)
-        }
-    }
-
-    override fun close() {
-        synchronized(lock) {
-            active = false
-            sessions.clear()
-        }
-    }
+    override fun close() = preference.close()
 }

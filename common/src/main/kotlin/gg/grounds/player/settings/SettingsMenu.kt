@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory
  * away and the write follows off the tick thread; a failed write puts the old value back and says
  * so.
  *
- * Language and region take effect at the player's next login: the proxy reads both on join.
+ * Language changes update presentation after storage commits; region applies on next login.
  *
  * The same menu on every server: it builds text and a [SettingsDialog], and [platform] shows it
  * with the engine's own dialog API (Minestom or Paper).
@@ -212,13 +212,17 @@ class SettingsMenu<P : Audience>(
                 save(
                     player,
                     state,
-                    {
-                        client.setLocale(id, code)
-                        // the proxy cached the old language at join; nudge it to read it again
-                        platform.sendPluginMessage(player, LOCALE_CHANNEL, ByteArray(0))
-                        onLanguageSaved(player, code)
-                        // the menu itself switches language too
-                        if (states[id] === state) show(player, state)
+                    { client.setLocale(id, code) },
+                    afterCommit = {
+                        notifySaved(player, "local language") { onLanguageSaved(player, code) }
+                        // The proxy rereads storage; a failed nudge must not undo the committed
+                        // PUT.
+                        notifySaved(player, "proxy language") {
+                            platform.sendPluginMessage(player, LOCALE_CHANNEL, ByteArray(0))
+                        }
+                        notifySaved(player, "language menu") {
+                            if (states[id] === state) show(player, state)
+                        }
                     },
                 ) {
                     state.language = before
@@ -355,9 +359,31 @@ class SettingsMenu<P : Audience>(
         requests.shutdownNow()
     }
 
-    private fun save(player: P, state: State, write: () -> Unit, undo: () -> Unit) {
+    private fun notifySaved(player: P, notification: String, action: () -> Unit) {
+        try {
+            action()
+        } catch (failure: Exception) {
+            logger.warn(
+                "Stored setting notification failed (player={}, notification={})",
+                platform.id(player),
+                notification,
+                failure,
+            )
+        }
+    }
+
+    private fun save(
+        player: P,
+        state: State,
+        write: () -> Unit,
+        afterCommit: () -> Unit = {},
+        undo: () -> Unit,
+    ) {
         CompletableFuture.runAsync(write, requests).whenComplete { _, error ->
-            if (error == null) return@whenComplete
+            if (error == null) {
+                afterCommit()
+                return@whenComplete
+            }
             val id = platform.id(player)
             logger.warn("A setting for {} could not be saved", id, error)
             undo()
