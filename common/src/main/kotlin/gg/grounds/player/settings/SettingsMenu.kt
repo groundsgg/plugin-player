@@ -76,14 +76,18 @@ class SettingsMenu<P : Audience>(
         val voiceStatus: VoiceStatus? = null,
         var mentionSounds: Boolean = true,
         @Volatile var sidebar: Boolean = true,
+        val alerts: MutableMap<Alert, Boolean> =
+            ConcurrentHashMap(Alert.entries.associateWith { true }),
     ) {
+        val confirmedAlerts = ConcurrentHashMap(alerts)
+        val alertRevisions = ConcurrentHashMap<Alert, Long>()
         @Volatile var sidebarRevision: Long = 0
         @Volatile var confirmedSidebar: Boolean = sidebar
     }
 
     /**
-     * The tabs down the left. [GENERAL], [REGION], [SOCIAL] and the chat tab's global chat and
-     * voice rows are real; the rest are previews for now.
+     * The tabs down the left. General, region, social and alerts are persisted. Chat and gameplay
+     * still contain a few preview rows alongside their persisted settings.
      */
     enum class Tab(
         internal val label: SettingsMessage,
@@ -94,10 +98,7 @@ class SettingsMenu<P : Audience>(
         REGION(SettingsMessage.REGION_MENU_TITLE),
         SOCIAL(SettingsMessage.SETTINGS_SOCIAL),
         CHAT(SettingsMessage.SETTINGS_TAB_CHAT, listOf(Preview.CHAT_FILTER)),
-        ALERTS(
-            SettingsMessage.SETTINGS_TAB_ALERTS,
-            listOf(Preview.FRIEND_ALERTS, Preview.PARTY_INVITES, Preview.MATCH_SOUND),
-        ),
+        ALERTS(SettingsMessage.SETTINGS_TAB_ALERTS),
         GAMEPLAY(
             SettingsMessage.SETTINGS_TAB_GAMEPLAY,
             listOf(Preview.PARTICLES, Preview.AUTO_REQUEUE),
@@ -116,18 +117,6 @@ class SettingsMenu<P : Audience>(
             SettingsMessage.SETTINGS_CHAT_FILTER,
             SettingsMessage.SETTINGS_CHAT_FILTER_HINT,
         ),
-        FRIEND_ALERTS(
-            SettingsMessage.SETTINGS_FRIEND_ALERTS,
-            SettingsMessage.SETTINGS_FRIEND_ALERTS_HINT,
-        ),
-        PARTY_INVITES(
-            SettingsMessage.SETTINGS_PARTY_INVITES,
-            SettingsMessage.SETTINGS_PARTY_INVITES_HINT,
-        ),
-        MATCH_SOUND(
-            SettingsMessage.SETTINGS_MATCH_SOUND,
-            SettingsMessage.SETTINGS_MATCH_SOUND_HINT,
-        ),
         PARTICLES(SettingsMessage.SETTINGS_PARTICLES, SettingsMessage.SETTINGS_PARTICLES_HINT),
         AUTO_REQUEUE(
             SettingsMessage.SETTINGS_AUTO_REQUEUE,
@@ -135,6 +124,30 @@ class SettingsMenu<P : Audience>(
         );
 
         val key: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/preview/${name.lowercase()}")
+    }
+
+    internal enum class Alert(
+        val path: String,
+        val title: SettingsMessage,
+        val hint: SettingsMessage,
+    ) {
+        FRIEND_ALERTS(
+            "friend-alerts",
+            SettingsMessage.SETTINGS_FRIEND_ALERTS,
+            SettingsMessage.SETTINGS_FRIEND_ALERTS_HINT,
+        ),
+        PARTY_INVITES(
+            "party-invites",
+            SettingsMessage.SETTINGS_PARTY_INVITES,
+            SettingsMessage.SETTINGS_PARTY_INVITES_HINT,
+        ),
+        MATCH_SOUND(
+            "match-sounds",
+            SettingsMessage.SETTINGS_MATCH_SOUND,
+            SettingsMessage.SETTINGS_MATCH_SOUND_HINT,
+        );
+
+        val key: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/$path")
     }
 
     fun open(player: P, tab: Tab = Tab.GENERAL) {
@@ -150,6 +163,10 @@ class SettingsMenu<P : Audience>(
                         live = liveRegions().map { it.lowercase() }.toSet(),
                         globalChat = client.globalChatEnabled(id),
                         mentionSounds = client.mentionSoundsEnabled(id),
+                        alerts =
+                            ConcurrentHashMap(
+                                Alert.entries.associateWith { client.alertEnabled(id, it.path) }
+                            ),
                         sidebar = client.sidebarEnabled(id),
                         voice = client.voicePreferences(id),
                         voiceStatus = voiceChat()?.status(id),
@@ -276,6 +293,25 @@ class SettingsMenu<P : Audience>(
                     },
                 ) {
                     state.mentionSounds = !enabled
+                }
+            }
+            in Alert.entries.map { it.key } -> {
+                val alert = Alert.entries.first { it.key == action }
+                val enabled = !(state.alerts[alert] ?: true)
+                val revision = (state.alertRevisions[alert] ?: 0L) + 1
+                state.alertRevisions[alert] = revision
+                state.alerts[alert] = enabled
+                save(
+                    player,
+                    state,
+                    {
+                        client.setAlertEnabled(id, alert.path, enabled)
+                        state.confirmedAlerts[alert] = enabled
+                    },
+                ) {
+                    if (state.alertRevisions[alert] == revision) {
+                        state.alerts[alert] = state.confirmedAlerts[alert] ?: true
+                    }
                 }
             }
             PARTY_VOICE,
@@ -525,7 +561,18 @@ class SettingsMenu<P : Audience>(
                     )
                     previews(c, state, text, first = 1)
                 }
-                else -> previews(c, state, text, first = 0)
+                Tab.ALERTS ->
+                    Alert.entries.forEachIndexed { i, alert ->
+                        toggleRow(
+                            c,
+                            ROW_Y + i * ROW_PITCH,
+                            text(alert.title),
+                            text(alert.hint),
+                            state.alerts[alert] ?: true,
+                            alert.key,
+                            text,
+                        )
+                    }
             }
             return c
         }
