@@ -38,12 +38,12 @@ dependencies {
     // The version the lobby and game images run (Minecraft 26.3, groundsgg fork). compileOnly:
     // the host brings Minestom, and compiling against an older API is how a NoSuchMethodError
     // gets shipped.
-    compileOnly("net.minestom:minestom:2026.10.02-26.3-grounds.1")
+    compileOnly("net.minestom:minestom:2026.10.07-26.2")
     // library-i18n renders MiniMessage, which Minestom does not bring, so it ships with the module.
     // The version tracks Minestom's own Adventure.
     implementation("net.kyori:adventure-text-minimessage:5.2.0")
 
-    testImplementation("net.minestom:minestom:2026.10.02-26.3-grounds.1")
+    testImplementation("net.minestom:minestom:2026.10.07-26.2")
     // DefaultServiceRegistry, for a GroundsServerContext in tests.
     testImplementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
     testImplementation(kotlin("test"))
