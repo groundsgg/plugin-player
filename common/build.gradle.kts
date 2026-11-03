@@ -23,13 +23,13 @@ dependencies {
     // Paper's Adventure 4; the tests run it on Minestom's 5, which is what the lobby and games use.
     compileOnly("net.kyori:adventure-api:5.2.0")
     compileOnly("net.kyori:adventure-text-serializer-plain:5.2.0")
-    compileOnly("com.google.code.gson:gson:2.13.2")
+    compileOnly("com.google.code.gson:gson:2.15.0")
     compileOnly("org.slf4j:slf4j-api:2.0.17")
 
     testImplementation("net.kyori:adventure-api:5.2.0")
     testImplementation("net.kyori:adventure-text-serializer-plain:5.2.0")
     testImplementation("net.kyori:adventure-text-minimessage:5.2.0")
-    testImplementation("com.google.code.gson:gson:2.13.2")
+    testImplementation("com.google.code.gson:gson:2.15.0")
     testImplementation("org.slf4j:slf4j-api:2.0.17")
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.3")
