@@ -89,6 +89,8 @@ class MentionSettingsFlowTest {
                                 }
                                 "{\"enabled\":$enabled}"
                             }
+                            path.endsWith("/privacy") ->
+                                """{"showStats":true,"showOnline":true,"partyInvites":"anyone","privateMessages":"anyone"}"""
                             path.endsWith("/locale") -> "{\"locale\":\"en\"}"
                             path.endsWith("/region") -> "{\"region\":null}"
                             path.endsWith("/voice/settings") ->

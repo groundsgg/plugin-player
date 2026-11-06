@@ -93,6 +93,8 @@ class AlertSettingsFlowTest {
                                 }
                                 "{\"enabled\":$enabled}"
                             }
+                            path.endsWith("/privacy") ->
+                                """{"showStats":true,"showOnline":true,"partyInvites":"anyone","privateMessages":"anyone"}"""
                             path.endsWith("/locale") -> "{\"locale\":\"en\"}"
                             path.endsWith("/region") -> "{\"region\":null}"
                             path.endsWith("/voice/settings") ->
@@ -124,57 +126,55 @@ class AlertSettingsFlowTest {
 
     @Test
     fun `alert toggle reads storage saves through its real click and survives reopening`() {
-        for (setting in listOf("friend-alerts", "party-invites", "match-sounds")) Backend(setting)
-            .use { backend ->
-                val platform = Platform()
-                val player = TestPlayer()
-                menu(platform, backend).use { menu ->
-                    menu.open(player, SettingsMenu.Tab.ALERTS)
-                    menu.onClick(player, alertClick(platform.dialog(), setting))
-                    platform.dialog()
-                    assertEquals(
-                        true,
-                        backend.writes.poll(5, TimeUnit.SECONDS),
-                        "Stored OFF must toggle ON",
-                    )
-                    assertTrue(platform.refreshes.isEmpty())
-                    menu.forget(player.id)
-                    menu.open(player, SettingsMenu.Tab.ALERTS)
-                    menu.onClick(player, alertClick(platform.dialog(), setting))
-                    assertEquals(
-                        false,
-                        backend.writes.poll(5, TimeUnit.SECONDS),
-                        "Reopened stored ON must toggle OFF",
-                    )
-                    assertTrue(platform.refreshes.isEmpty())
-                }
+        for (setting in listOf("friend-alerts", "match-sounds")) Backend(setting).use { backend ->
+            val platform = Platform()
+            val player = TestPlayer()
+            menu(platform, backend).use { menu ->
+                menu.open(player, SettingsMenu.Tab.ALERTS)
+                menu.onClick(player, alertClick(platform.dialog(), setting))
+                platform.dialog()
+                assertEquals(
+                    true,
+                    backend.writes.poll(5, TimeUnit.SECONDS),
+                    "Stored OFF must toggle ON",
+                )
+                assertTrue(platform.refreshes.isEmpty())
+                menu.forget(player.id)
+                menu.open(player, SettingsMenu.Tab.ALERTS)
+                menu.onClick(player, alertClick(platform.dialog(), setting))
+                assertEquals(
+                    false,
+                    backend.writes.poll(5, TimeUnit.SECONDS),
+                    "Reopened stored ON must toggle OFF",
+                )
+                assertTrue(platform.refreshes.isEmpty())
             }
+        }
     }
 
     @Test
     fun `failed save rolls back and never announces a setting change`() {
-        for (setting in listOf("friend-alerts", "party-invites", "match-sounds")) Backend(setting)
-            .use { backend ->
-                backend.fail = true
-                val platform = Platform()
-                val player = TestPlayer()
-                menu(platform, backend).use { menu ->
-                    menu.open(player, SettingsMenu.Tab.ALERTS)
-                    menu.onClick(player, alertClick(platform.dialog(), setting))
-                    platform.dialog()
-                    assertEquals(true, backend.writes.poll(5, TimeUnit.SECONDS))
-                    assertNotNull(player.errors.poll(5, TimeUnit.SECONDS))
-                    val restored = platform.dialog()
-                    assertTrue(platform.refreshes.isEmpty())
-                    backend.fail = false
-                    menu.onClick(player, alertClick(restored, setting))
-                    assertEquals(
-                        true,
-                        backend.writes.poll(5, TimeUnit.SECONDS),
-                        "Failed ON must have rolled back to OFF",
-                    )
-                    assertTrue(platform.refreshes.isEmpty())
-                }
+        for (setting in listOf("friend-alerts", "match-sounds")) Backend(setting).use { backend ->
+            backend.fail = true
+            val platform = Platform()
+            val player = TestPlayer()
+            menu(platform, backend).use { menu ->
+                menu.open(player, SettingsMenu.Tab.ALERTS)
+                menu.onClick(player, alertClick(platform.dialog(), setting))
+                platform.dialog()
+                assertEquals(true, backend.writes.poll(5, TimeUnit.SECONDS))
+                assertNotNull(player.errors.poll(5, TimeUnit.SECONDS))
+                val restored = platform.dialog()
+                assertTrue(platform.refreshes.isEmpty())
+                backend.fail = false
+                menu.onClick(player, alertClick(restored, setting))
+                assertEquals(
+                    true,
+                    backend.writes.poll(5, TimeUnit.SECONDS),
+                    "Failed ON must have rolled back to OFF",
+                )
+                assertTrue(platform.refreshes.isEmpty())
             }
+        }
     }
 }

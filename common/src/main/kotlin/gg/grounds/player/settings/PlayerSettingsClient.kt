@@ -74,6 +74,38 @@ class PlayerSettingsClient(
         send(put("$playerServiceUrl/v1/players/$player/sidebar", enabled(enabled)))
     }
 
+    fun privacy(player: UUID): PrivacySettings =
+        privacy(send(get("$socialServiceUrl/v1/social/players/$player/privacy")))
+
+    fun setPrivacy(player: UUID, value: PrivacySettings): PrivacySettings =
+        privacy(
+            send(
+                put(
+                    "$socialServiceUrl/v1/social/players/$player/privacy",
+                    JsonObject().apply {
+                        addProperty("showStats", value.showStats)
+                        addProperty("showOnline", value.showOnline)
+                        addProperty("partyInvites", value.partyInvites.wire)
+                        addProperty("privateMessages", value.privateMessages.wire)
+                    },
+                )
+            )
+        )
+
+    private fun privacy(body: JsonObject): PrivacySettings {
+        fun flag(name: String): Boolean {
+            val value = body.get(name)
+            check(value != null && value.isJsonPrimitive && value.asJsonPrimitive.isBoolean)
+            return value.asBoolean
+        }
+        return PrivacySettings(
+            flag("showStats"),
+            flag("showOnline"),
+            PrivacyAudience.fromWire(body.get("partyInvites").asString),
+            PrivacyAudience.fromWire(body.get("privateMessages").asString),
+        )
+    }
+
     fun friendRequestsEnabled(player: UUID): Boolean =
         send(get(socialSettingsUrl(player, "friend-requests"))).get("enabled").asBoolean
 

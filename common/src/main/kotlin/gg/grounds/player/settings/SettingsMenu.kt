@@ -21,11 +21,10 @@ import org.slf4j.LoggerFactory
  * `/settings`: the player's network settings, drawn inside a vanilla dialog body with the
  * grounds-global PackSet's menu fonts.
  *
- * Only settings the network actually stores are offered: the language and the default region
- * (service-player), and whether friend requests and private messages are accepted (service-social).
- * All are read when the menu opens and written on every click. The click updates the menu straight
- * away and the write follows off the tick thread; a failed write puts the old value back and says
- * so.
+ * Stored language, region and sidebar settings come from service-player. Social preferences and the
+ * canonical privacy aggregate come from service-social. All are read when the menu opens and
+ * written on every click. The click updates the menu straight away and the write follows off the
+ * tick thread; a failed write puts the old value back and says so.
  *
  * Language changes update presentation after storage commits; region applies on next login.
  *
@@ -79,6 +78,16 @@ class SettingsMenu<P : Audience>(
         val alerts: MutableMap<Alert, Boolean> =
             ConcurrentHashMap(Alert.entries.associateWith { true }),
     ) {
+        @Volatile
+        var privacy =
+            PrivacySettings(
+                true,
+                true,
+                PrivacyAudience.ANYONE,
+                if (privateMessages) PrivacyAudience.ANYONE else PrivacyAudience.NOBODY,
+            )
+        @Volatile var confirmedPrivacy = privacy
+        @Volatile var privacyRevision: Long = 0
         val confirmedAlerts = ConcurrentHashMap(alerts)
         val alertRevisions = ConcurrentHashMap<Alert, Long>()
         @Volatile var sidebarRevision: Long = 0
@@ -97,6 +106,7 @@ class SettingsMenu<P : Audience>(
         /** The world map ([RegionTab]); `/region` opens the menu here. */
         REGION(SettingsMessage.REGION_MENU_TITLE),
         SOCIAL(SettingsMessage.SETTINGS_SOCIAL),
+        PRIVACY(SettingsMessage.SETTINGS_PRIVACY),
         CHAT(SettingsMessage.SETTINGS_TAB_CHAT, listOf(Preview.CHAT_FILTER)),
         ALERTS(SettingsMessage.SETTINGS_TAB_ALERTS),
         GAMEPLAY(
@@ -136,11 +146,6 @@ class SettingsMenu<P : Audience>(
             SettingsMessage.SETTINGS_FRIEND_ALERTS,
             SettingsMessage.SETTINGS_FRIEND_ALERTS_HINT,
         ),
-        PARTY_INVITES(
-            "party-invites",
-            SettingsMessage.SETTINGS_PARTY_INVITES,
-            SettingsMessage.SETTINGS_PARTY_INVITES_HINT,
-        ),
         MATCH_SOUND(
             "match-sounds",
             SettingsMessage.SETTINGS_MATCH_SOUND,
@@ -154,23 +159,28 @@ class SettingsMenu<P : Audience>(
         val id = platform.id(player)
         CompletableFuture.supplyAsync(
                 {
+                    val privacy = client.privacy(id)
                     State(
-                        language = languageIndex(client.locale(id)),
-                        region = client.region(id),
-                        friendRequests = client.friendRequestsEnabled(id),
-                        privateMessages = client.privateMessagesEnabled(id),
-                        tab = tab,
-                        live = liveRegions().map { it.lowercase() }.toSet(),
-                        globalChat = client.globalChatEnabled(id),
-                        mentionSounds = client.mentionSoundsEnabled(id),
-                        alerts =
-                            ConcurrentHashMap(
-                                Alert.entries.associateWith { client.alertEnabled(id, it.path) }
-                            ),
-                        sidebar = client.sidebarEnabled(id),
-                        voice = client.voicePreferences(id),
-                        voiceStatus = voiceChat()?.status(id),
-                    )
+                            language = languageIndex(client.locale(id)),
+                            region = client.region(id),
+                            friendRequests = client.friendRequestsEnabled(id),
+                            privateMessages = privacy.privateMessages != PrivacyAudience.NOBODY,
+                            tab = tab,
+                            live = liveRegions().map { it.lowercase() }.toSet(),
+                            globalChat = client.globalChatEnabled(id),
+                            mentionSounds = client.mentionSoundsEnabled(id),
+                            alerts =
+                                ConcurrentHashMap(
+                                    Alert.entries.associateWith { client.alertEnabled(id, it.path) }
+                                ),
+                            sidebar = client.sidebarEnabled(id),
+                            voice = client.voicePreferences(id),
+                            voiceStatus = voiceChat()?.status(id),
+                        )
+                        .apply {
+                            this.privacy = privacy
+                            confirmedPrivacy = privacy
+                        }
                 },
                 requests,
             )
@@ -244,13 +254,28 @@ class SettingsMenu<P : Audience>(
                     state.friendRequests = !enabled
                 }
             }
-            PRIVATE_MESSAGES -> {
-                val enabled = !state.privateMessages
-                state.privateMessages = enabled
-                save(player, state, { client.setPrivateMessagesEnabled(id, enabled) }) {
-                    state.privateMessages = !enabled
+            PRIVATE_MESSAGES ->
+                changePrivacy(player, state) {
+                    it.copy(
+                        privateMessages =
+                            if (it.privateMessages == PrivacyAudience.NOBODY) PrivacyAudience.ANYONE
+                            else PrivacyAudience.NOBODY
+                    )
                 }
-            }
+            SHOW_STATS -> changePrivacy(player, state) { it.copy(showStats = !it.showStats) }
+            SHOW_ONLINE -> changePrivacy(player, state) { it.copy(showOnline = !it.showOnline) }
+            PARTY_AUDIENCE_PREVIOUS,
+            PARTY_AUDIENCE_NEXT ->
+                changePrivacy(player, state) {
+                    it.copy(partyInvites = it.partyInvites.step(action == PARTY_AUDIENCE_NEXT))
+                }
+            MESSAGE_AUDIENCE_PREVIOUS,
+            MESSAGE_AUDIENCE_NEXT ->
+                changePrivacy(player, state) {
+                    it.copy(
+                        privateMessages = it.privateMessages.step(action == MESSAGE_AUDIENCE_NEXT)
+                    )
+                }
             GLOBAL_CHAT -> {
                 val enabled = !state.globalChat
                 state.globalChat = enabled
@@ -372,6 +397,60 @@ class SettingsMenu<P : Audience>(
         }
     }
 
+    /** Read before each serialized write so another client's unrelated changes survive. */
+    private fun changePrivacy(
+        player: P,
+        state: State,
+        change: (PrivacySettings) -> PrivacySettings,
+    ) {
+        val revision = ++state.privacyRevision
+        val before = state.privacy
+        val desired = change(before)
+        state.privacy = desired
+        state.privateMessages = state.privacy.privateMessages != PrivacyAudience.NOBODY
+        CompletableFuture.supplyAsync(
+                {
+                    val current = client.privacy(platform.id(player))
+                    val value =
+                        current.copy(
+                            showStats =
+                                if (before.showStats != desired.showStats) desired.showStats
+                                else current.showStats,
+                            showOnline =
+                                if (before.showOnline != desired.showOnline) desired.showOnline
+                                else current.showOnline,
+                            partyInvites =
+                                if (before.partyInvites != desired.partyInvites)
+                                    desired.partyInvites
+                                else current.partyInvites,
+                            privateMessages =
+                                if (before.privateMessages != desired.privateMessages)
+                                    desired.privateMessages
+                                else current.privateMessages,
+                        )
+                    client.setPrivacy(platform.id(player), value)
+                },
+                requests,
+            )
+            .whenComplete { saved, error ->
+                if (error == null) state.confirmedPrivacy = saved
+                if (state.privacyRevision == revision) {
+                    state.privacy = if (error == null) saved else state.confirmedPrivacy
+                    state.privateMessages = state.privacy.privateMessages != PrivacyAudience.NOBODY
+                }
+                if (error != null) {
+                    logger.warn(
+                        "Privacy settings save failed (playerId={})",
+                        platform.id(player),
+                        error,
+                    )
+                    messages.send(player, SettingsMessage.SETTINGS_SAVE_FAILED)
+                }
+                if (states[platform.id(player)] === state && state.privacyRevision == revision)
+                    show(player, state)
+            }
+    }
+
     private fun save(
         player: P,
         state: State,
@@ -468,6 +547,16 @@ class SettingsMenu<P : Audience>(
             Key.key(ClickTokens.NAMESPACE, "menu/settings/friend-requests")
         private val PRIVATE_MESSAGES: Key =
             Key.key(ClickTokens.NAMESPACE, "menu/settings/private-messages")
+        private val SHOW_STATS = Key.key(ClickTokens.NAMESPACE, "menu/settings/show-stats")
+        private val SHOW_ONLINE = Key.key(ClickTokens.NAMESPACE, "menu/settings/show-online")
+        private val PARTY_AUDIENCE_PREVIOUS =
+            Key.key(ClickTokens.NAMESPACE, "menu/settings/party-audience/previous")
+        private val PARTY_AUDIENCE_NEXT =
+            Key.key(ClickTokens.NAMESPACE, "menu/settings/party-audience/next")
+        private val MESSAGE_AUDIENCE_PREVIOUS =
+            Key.key(ClickTokens.NAMESPACE, "menu/settings/message-audience/previous")
+        private val MESSAGE_AUDIENCE_NEXT =
+            Key.key(ClickTokens.NAMESPACE, "menu/settings/message-audience/next")
         private val SIDEBAR: Key = Key.key(ClickTokens.NAMESPACE, "menu/settings/sidebar")
         private val MENTION_SOUNDS: Key =
             Key.key(ClickTokens.NAMESPACE, "menu/settings/mention-sounds")
@@ -529,6 +618,7 @@ class SettingsMenu<P : Audience>(
                 Tab.GENERAL -> general(c, state, text)
                 Tab.REGION -> RegionTab.draw(c, X, state.region, state.live, text)
                 Tab.SOCIAL -> social(c, state, text)
+                Tab.PRIVACY -> privacy(c, state, text)
                 Tab.CHAT -> {
                     toggleRow(
                         c,
@@ -676,14 +766,48 @@ class SettingsMenu<P : Audience>(
                 on = state.friendRequests,
                 action = FRIEND_REQUESTS,
             )
+        }
+
+        private fun privacy(c: BodyCanvas, state: State, text: (SettingsMessage) -> String) {
             toggleRow(
                 c,
-                y = ROW_Y + ROW_PITCH,
-                title = text(SettingsMessage.SETTINGS_PRIVATE_MESSAGES),
-                description = text(SettingsMessage.SETTINGS_PRIVATE_MESSAGES_HINT),
-                text = text,
-                on = state.privateMessages,
-                action = PRIVATE_MESSAGES,
+                ROW_Y,
+                text(SettingsMessage.SETTINGS_SHOW_STATS),
+                text(SettingsMessage.SETTINGS_SHOW_STATS_HINT),
+                state.privacy.showStats,
+                SHOW_STATS,
+                text,
+            )
+            toggleRow(
+                c,
+                ROW_Y + ROW_PITCH,
+                text(SettingsMessage.SETTINGS_SHOW_ONLINE),
+                text(SettingsMessage.SETTINGS_SHOW_ONLINE_HINT),
+                state.privacy.showOnline,
+                SHOW_ONLINE,
+                text,
+            )
+            choiceRow(
+                c,
+                ROW_Y + 2 * ROW_PITCH,
+                text(SettingsMessage.SETTINGS_PARTY_INVITES),
+                text(state.privacy.partyInvites.label),
+                text(SettingsMessage.SETTINGS_PARTY_AUDIENCE_HINT),
+                "",
+                PARTY_AUDIENCE_PREVIOUS,
+                PARTY_AUDIENCE_NEXT,
+                text,
+            )
+            choiceRow(
+                c,
+                ROW_Y + 3 * ROW_PITCH,
+                text(SettingsMessage.SETTINGS_PRIVATE_MESSAGES),
+                text(state.privacy.privateMessages.label),
+                text(SettingsMessage.SETTINGS_MESSAGE_AUDIENCE_HINT),
+                "",
+                MESSAGE_AUDIENCE_PREVIOUS,
+                MESSAGE_AUDIENCE_NEXT,
+                text,
             )
         }
 

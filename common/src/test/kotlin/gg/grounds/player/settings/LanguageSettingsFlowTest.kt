@@ -76,6 +76,8 @@ class LanguageSettingsFlowTest {
                     val path = exchange.requestURI.path
                     val body =
                         when {
+                            path.endsWith("/privacy") ->
+                                """{"showStats":true,"showOnline":true,"partyInvites":"anyone","privateMessages":"anyone"}"""
                             path.endsWith("/locale") -> {
                                 if (exchange.requestMethod == "PUT") {
                                     val value =
