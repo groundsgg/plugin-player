@@ -32,7 +32,7 @@ repositories {
 dependencies {
     implementation(project(":common"))
     implementation("gg.grounds:library-minigame-api-minestom:0.6.0")
-    implementation("io.nats:jnats:2.26.4")
+    implementation("io.nats:jnats:2.27.0")
     testImplementation("org.testcontainers:testcontainers:2.0.5")
     api("gg.grounds:grounds-minestom-runtime-runtime-api:0.4.0")
     // The version the lobby and game images run (Minecraft 26.3, groundsgg fork). compileOnly:
