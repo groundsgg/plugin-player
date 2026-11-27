@@ -17,7 +17,7 @@ dependencies {
 
     // The settings menu. Its text goes through library-i18n; api, as SettingsMenu.messages returns
     // it.
-    api("gg.grounds:library-i18n:0.4.4")
+    api("gg.grounds:library-i18n:0.5.0")
     // compileOnly: Minestom, Paper and Velocity each ship their own Adventure, Gson and SLF4J, and
     // a shaded copy of Adventure is a second Component type the host rejects. Compiled against
     // Paper's Adventure 4; the tests run it on Minestom's 5, which is what the lobby and games use.
