@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/groundsgg/plugin-player/compare/v1.10.2...v1.11.0) (2026-11-27)
+
+
+### Features
+
+* render system badges for player settings messages ([#93](https://github.com/groundsgg/plugin-player/issues/93)) ([9b91cd1](https://github.com/groundsgg/plugin-player/commit/9b91cd17963acfd323e8f7ef39b5508e9358c1fa))
+
 ## [1.10.2](https://github.com/groundsgg/plugin-player/compare/v1.10.1...v1.10.2) (2026-10-31)
 
 
